@@ -4,7 +4,12 @@
 
 # OpsWarden — Ops
 
-*The cloud deployment layer for OpsWarden — Kubernetes on DigitalOcean, provisioned by Terraform, fronted by Traefik.*
+<p>
+  <a href="https://github.com/RomeoCavazza/opswarden-ops/actions/workflows/ops-ci.yml"><img src="https://github.com/RomeoCavazza/opswarden-ops/actions/workflows/ops-ci.yml/badge.svg" alt="Ops CI" /></a>
+  <img src="https://img.shields.io/github/v/release/RomeoCavazza/opswarden-ops?style=flat-square&label=release" alt="Release" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-F4C430?style=flat-square" alt="License: Apache 2.0" /></a>
+  <img src="https://img.shields.io/badge/status-baseline-2F2F2F?style=flat-square" alt="Status: baseline" />
+</p>
 
 <br />
 
@@ -71,16 +76,16 @@ opswarden-ops/
 
 ## Services
 
-| Service | Tech | Status |
-|---|:--:|---|
-| **server** | <img src="https://skillicons.dev/icons?i=rust" height="22" /> Rust / Axum | placeholder — `k8s/server/` |
-| **client-web** | <img src="https://skillicons.dev/icons?i=nextjs" height="22" /> Next.js | placeholder — `k8s/client-web/` (or Vercel) |
-| **investigation** | <img src="https://skillicons.dev/icons?i=python" height="22" /> FastAPI (AI SRE) | placeholder — `k8s/investigation/` |
-| **worker** | async | placeholder — `k8s/worker/` |
-| **PostgreSQL** | <img src="https://skillicons.dev/icons?i=postgres" height="22" /> `postgres:13` | ready — `k8s/postgres/` |
-| **Redis** | <img src="https://skillicons.dev/icons?i=redis" height="22" /> `redis:5.0` | ready — `k8s/redis/` |
-| **Traefik** | `traefik:2.7` | ready — `k8s/traefik/` |
-| **cAdvisor** | <img src="https://skillicons.dev/icons?i=prometheus" height="22" /> monitoring | ready — `k8s/observability/` |
+| Service           |                                       Tech                                       | Status                                      |
+| ----------------- | :------------------------------------------------------------------------------: | ------------------------------------------- |
+| **server**        |    <img src="https://skillicons.dev/icons?i=rust" height="22" /> Rust / Axum     | placeholder — `k8s/server/`                 |
+| **client-web**    |     <img src="https://skillicons.dev/icons?i=nextjs" height="22" /> Next.js      | placeholder — `k8s/client-web/` (or Vercel) |
+| **investigation** | <img src="https://skillicons.dev/icons?i=python" height="22" /> FastAPI (AI SRE) | placeholder — `k8s/investigation/`          |
+| **worker**        |                                      async                                       | placeholder — `k8s/worker/`                 |
+| **PostgreSQL**    | <img src="https://skillicons.dev/icons?i=postgres" height="22" /> `postgres:13`  | ready — `k8s/postgres/`                     |
+| **Redis**         |    <img src="https://skillicons.dev/icons?i=redis" height="22" /> `redis:5.0`    | ready — `k8s/redis/`                        |
+| **Traefik**       |                                  `traefik:2.7`                                   | ready — `k8s/traefik/`                      |
+| **cAdvisor**      |  <img src="https://skillicons.dev/icons?i=prometheus" height="22" /> monitoring  | ready — `k8s/observability/`                |
 
 Replicated services use **pod anti-affinity** to land on different nodes.
 Shared config lives in **ConfigMaps**; credentials in **Secrets** (rotate the
@@ -185,6 +190,6 @@ cd terraform && terraform destroy
 
 <div align="center">
 
-*OpsWarden — cloud showcase. Never a prerequisite to run the product.*
+_OpsWarden — cloud showcase. Never a prerequisite to run the product._
 
 </div>

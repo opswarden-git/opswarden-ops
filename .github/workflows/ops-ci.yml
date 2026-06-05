@@ -1,0 +1,40 @@
+---
+# Ops CI — formate et valide l'IaC (prettier + terraform fmt).
+name: Ops CI
+
+"on":
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Format & validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prettier check (yaml / md / json)
+        run: npx --yes prettier --check "**/*.{yaml,yml,md,json}"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform fmt check
+        run: terraform -chdir=terraform fmt -check
+
+      # À activer quand les manifests seront réels (pas des placeholders) :
+      # - name: Validate manifests (kubeconform)
+      #   run: |
+      #     find k8s -name '*.yaml' | xargs kubeconform -strict -ignore-missing-schemas -summary
