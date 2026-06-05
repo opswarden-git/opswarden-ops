@@ -1,0 +1,9 @@
+# OpsWarden -- Observability -- PLACEHOLDER (cAdvisor est deja present a cote).
+#
+# Present : cadvisor.daemonset.yaml (metriques conteneurs sur chaque noeud).
+#
+# A ajouter (templates existants cote Romeo, ~1 jour) :
+#   - prometheus       : scrape + stockage des metriques
+#   - grafana          : dashboards (CPU / memoire / MTTR)
+#   - loki + promtail  : agregation de logs
+#   - otel-collector   : traces distribuees (OpenTelemetry)

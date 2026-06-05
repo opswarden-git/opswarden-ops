@@ -1,0 +1,10 @@
+# OpsWarden -- investigation (AI SRE / RAG, FastAPI) -- PLACEHOLDER.
+#
+# Service extrait derriere le port InvestigationEngine : endpoints @ask / @search,
+# embeddings stockes dans pgvector (reutilise Postgres). Appele en interne par le
+# server, donc pas d'ingress public.
+#
+# A remplir quand l'agent existera :
+#   - deployment.yaml : image opswarden-investigation, acces Postgres+pgvector,
+#                       Secret pour la cle LLM/SLM
+#   - service.yaml    : ClusterIP (interne)

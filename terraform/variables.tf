@@ -6,6 +6,6 @@ variable "region" {
 
 variable "cluster_name" {
   type        = string
-  default     = "bernstein-cluster"
+  default     = "opswarden-cluster"
   description = "Nom du cluster Kubernetes"
 }

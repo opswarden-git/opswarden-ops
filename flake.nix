@@ -1,5 +1,5 @@
 {
-  description = "Epitech Seminar DOP - Bernstein Project (DigitalOcean & Kubernetes)";
+  description = "OpsWarden Ops -- DigitalOcean & Kubernetes deployment environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -35,13 +35,10 @@
             # Clean terminal and print a professional header
             echo -e "\033[1;36m"
             cat << "EOF"
-  ____  _____ ____  _   _ ____ _____ _____ ___ _   _ 
- | __ )| ____|  _ \| \ | / ___|_   _| ____|_ _| \ | |
- |  _ \|  _| | |_) |  \| \___ \ | | |  _|  | ||  \| |
- | |_) | |___|  _ <| |\  |___) || | | |___ | || |\  |
- |____/|_____|_| \_\_| \_|____/ |_| |_____|___|_| \_|
-                                                     
-         DigitalOcean Cloud Project Environment      
+  ==============================================
+   OpsWarden Ops -- Kubernetes / DigitalOcean
+   Infrastructure & deployment environment
+  ==============================================
 EOF
             echo -e "\033[0m"
 

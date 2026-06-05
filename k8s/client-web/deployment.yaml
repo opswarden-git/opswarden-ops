@@ -1,0 +1,8 @@
+# OpsWarden -- client-web (Next.js) -- PLACEHOLDER.
+#
+# Deux options de deploiement (cf. roadmap) :
+#   a) Vercel (recommande pour le web) -- alors ce dossier reste vide.
+#   b) k8s ici -- remplir : deployment.yaml (image opswarden-client-web),
+#      service.yaml (:8081), ingress.yaml (route Traefik, ex. app.opswarden.example).
+#
+# A remplir quand le front sera pret et que l'option de deploiement sera tranchee.

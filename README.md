@@ -1,10 +1,10 @@
 <div align="center">
 
-# Bernstein
+# OpsWarden — Ops
 
-### Containers Symphony Orchestration
+### Infrastructure & Deployment
 
-*Become the Leonard Bernstein of containers — orchestrate a multi-service voting application on Kubernetes.*
+*The cloud deployment layer for OpsWarden — Kubernetes on DigitalOcean, provisioned by Terraform, fronted by Traefik.*
 
 <br />
 
@@ -16,7 +16,9 @@
 
 <br /><br />
 
-<img src="docs/architecture.png" alt="Bernstein Architecture" width="100%" />
+<img src="docs/architecture.png" alt="Reference cluster topology" width="100%" />
+
+<sub><i>Reference cluster topology — to be replaced by OpsWarden's own diagram.</i></sub>
 
 </div>
 
@@ -26,141 +28,72 @@
 
 ## About
 
-A Kubernetes deployment of a **distributed voting application** across a multi-node cloud cluster. Users vote through a Flask web interface, votes transit via a Redis queue, a Java worker persists them to PostgreSQL, and a Node.js dashboard displays live results — all orchestrated by Traefik as a reverse proxy and load balancer.
+`opswarden-ops` is the **infrastructure & deployment** repository for OpsWarden:
+a Kubernetes deployment on **DigitalOcean (DOKS)**, provisioned end-to-end by
+**Terraform**, routed by **Traefik**, with a reproducible dev environment via
+**Nix**.
 
-Infrastructure is provisioned on **DigitalOcean** (DOKS) via **Terraform**, and the development environment is fully reproducible with **Nix**.
+It is **separate from the product** (`opswarden-app`) and **deliberately optional**:
+OpsWarden runs with a single `docker compose up`. This repo is the **portfolio
+cloud showcase** — it must never be a prerequisite to run or grade the product.
+
+> Status: this repo is derived from a **proven reference deployment** (a working
+> DOKS + Traefik + Postgres/Redis stack). The reusable infrastructure manifests
+> are in place; the OpsWarden application services are **placeholders** until
+> their images are published. See the per-service status below.
 
 ---
 
 ## Project Structure
 
 ```
-bernstein/
+opswarden-ops/
 │
-├── Kubernetes Manifests (root)
-│   ├── cadvisor.daemonset.yaml
-│   ├── poll.deployment.yaml
-│   ├── poll.ingress.yaml
-│   ├── poll.service.yaml
-│   ├── postgres.configmap.yaml
-│   ├── postgres.deployment.yaml
-│   ├── postgres.secret.yaml
-│   ├── postgres.service.yaml
-│   ├── postgres.volume.yaml
-│   ├── redis.configmap.yaml
-│   ├── redis.deployment.yaml
-│   ├── redis.service.yaml
-│   ├── result.deployment.yaml
-│   ├── result.ingress.yaml
-│   ├── result.service.yaml
-│   ├── traefik.deployment.yaml
-│   ├── traefik.rbac.yaml
-│   ├── traefik.service.yaml
-│   └── worker.deployment.yaml
+├── k8s/
+│   ├── server/             # OpsWarden server (Rust/Axum)  — placeholder
+│   ├── client-web/         # Next.js client (or Vercel)    — placeholder
+│   ├── investigation/      # AI SRE agent (RAG/FastAPI)     — placeholder
+│   ├── worker/             # async Redis workers           — placeholder
+│   ├── postgres/           # PostgreSQL                     — ready
+│   ├── redis/              # Redis                          — ready
+│   ├── traefik/            # ingress controller & LB        — ready
+│   └── observability/      # cAdvisor (+ prom/grafana/loki) — partial
 │
-├── bootstrap/              Local Minikube exercises
-│   ├── hello-world.pod.yaml
-│   ├── hello-world.service.yaml
-│   ├── hello-world.volume.yaml
-│   ├── hello-world.deployment.yaml
-│   └── flake.nix
-│
-├── terraform/              DOKS cluster provisioning
-│   ├── main.tf
-│   ├── outputs.tf
-│   ├── providers.tf
-│   └── variables.tf
-│
-├── docs/
-│   ├── architecture.png
-│   ├── kickoff.pdf
-│   └── project.pdf
-│
-├── .env                    API tokens (git-ignored)
-├── .gitignore
-├── flake.nix               Nix dev environment
+├── terraform/              # DOKS cluster provisioning (main/outputs/providers/variables.tf)
+├── docs/                   # architecture + cluster screenshots
+├── flake.nix / flake.lock  # Nix dev shell (kubectl, terraform, k9s, helm…)
+├── .env                    # API tokens (git-ignored)
+├── LICENSE / NOTICE        # Apache-2.0
 └── README.md
 ```
 
 ---
 
-## How It Works
+## Services
 
-The application follows a classic **event-driven microservices** pattern. A user casts a vote through a Python/Flask web interface. Instead of writing directly to the database (which would be slow under heavy load), the vote is pushed into a **Redis queue** — an ultra-fast in-memory store that absorbs traffic spikes. A **Java worker** continuously watches that queue, picks up each vote, and writes it into **PostgreSQL** for durable storage. On the other side, a **Node.js** dashboard reads from PostgreSQL and displays live results. All external traffic enters through **Traefik**, a cloud-native reverse proxy that routes requests based on the hostname (`poll.dop.io` vs `result.dop.io`) and load-balances across replicas. A **cAdvisor** DaemonSet monitors resource usage on every node.
+| Service | Tech | Status |
+|---|:--:|---|
+| **server** | <img src="https://skillicons.dev/icons?i=rust" height="22" /> Rust / Axum | placeholder — `k8s/server/` |
+| **client-web** | <img src="https://skillicons.dev/icons?i=nextjs" height="22" /> Next.js | placeholder — `k8s/client-web/` (or Vercel) |
+| **investigation** | <img src="https://skillicons.dev/icons?i=python" height="22" /> FastAPI (AI SRE) | placeholder — `k8s/investigation/` |
+| **worker** | async | placeholder — `k8s/worker/` |
+| **PostgreSQL** | <img src="https://skillicons.dev/icons?i=postgres" height="22" /> `postgres:13` | ready — `k8s/postgres/` |
+| **Redis** | <img src="https://skillicons.dev/icons?i=redis" height="22" /> `redis:5.0` | ready — `k8s/redis/` |
+| **Traefik** | `traefik:2.7` | ready — `k8s/traefik/` |
+| **cAdvisor** | <img src="https://skillicons.dev/icons?i=prometheus" height="22" /> monitoring | ready — `k8s/observability/` |
 
-Shared configuration (hosts, ports, database name) lives in Kubernetes **ConfigMaps**, while sensitive credentials are stored in **Secrets**. Replicated services use **pod anti-affinity** to guarantee they run on different nodes for high availability.
-
-| Service | Tech | Image | Replicas | Port | Role |
-|---------|:----:|-------|:--------:|:----:|------|
-| **Poll** | <img src="https://skillicons.dev/icons?i=python" height="24" /> | `epitechcontent/t-dop-600-poll:k8s` | 2 | 80 | Web voting interface |
-| **Redis** | <img src="https://skillicons.dev/icons?i=redis" height="24" /> | `redis:5.0` | 1 | 6379 | In-memory vote queue |
-| **Worker** | <img src="https://skillicons.dev/icons?i=java" height="24" /> | `epitechcontent/t-dop-600-worker:k8s` | 1 | — | Queue consumer |
-| **PostgreSQL** | <img src="https://skillicons.dev/icons?i=postgres" height="24" /> | `postgres:13` | 1 | 5432 | Persistent storage |
-| **Result** | <img src="https://skillicons.dev/icons?i=nodejs" height="24" /> | `epitechcontent/t-dop-600-result:k8s` | 2 | 80 | Live results dashboard |
-| **Traefik** | <img src="https://skillicons.dev/icons?i=docker" height="24" /> | `traefik:2.7` | 2 | 80, 8080 | Reverse proxy & LB |
-| **cAdvisor** | <img src="https://skillicons.dev/icons?i=prometheus" height="24" /> | `gcr.io/cadvisor/cadvisor:latest` | all | 8080 | Container monitoring |
-
-### File Index
-
-Every manifest and configuration file, grouped by role. All links are clickable.
-
-### Monitoring
-
-- [cadvisor.daemonset.yaml](cadvisor.daemonset.yaml) — `DaemonSet` — cAdvisor monitoring agent on every node (`kube-system`)
-
-### Databases
-
-- **Redis** — in-memory vote queue
-  - [redis.configmap.yaml](redis.configmap.yaml) — `ConfigMap` — `REDIS_HOST` shared configuration
-  - [redis.deployment.yaml](redis.deployment.yaml) — `Deployment` — Redis 5.0
-  - [redis.service.yaml](redis.service.yaml) — `Service` — ClusterIP exposing Redis on `6379`
-- **PostgreSQL** — durable vote storage
-  - [postgres.secret.yaml](postgres.secret.yaml) — `Secret` — `POSTGRES_USER` / `POSTGRES_PASSWORD` credentials
-  - [postgres.configmap.yaml](postgres.configmap.yaml) — `ConfigMap` — `POSTGRES_HOST` / `PORT` / `DB` shared config
-  - [postgres.volume.yaml](postgres.volume.yaml) — `PVC` — persistent storage on `do-block-storage`
-  - [postgres.deployment.yaml](postgres.deployment.yaml) — `Deployment` — PostgreSQL 13
-  - [postgres.service.yaml](postgres.service.yaml) — `Service` — ClusterIP exposing Postgres on `5432`
-
-### Application Services
-
-- **Poll** — Flask voting front-end
-  - [poll.deployment.yaml](poll.deployment.yaml) — `Deployment` — 2 replicas, pod anti-affinity
-  - [poll.service.yaml](poll.service.yaml) — `Service` — ClusterIP on `80`
-  - [poll.ingress.yaml](poll.ingress.yaml) — `Ingress` — Traefik route for `poll.dop.io`
-- **Worker** — Java queue consumer
-  - [worker.deployment.yaml](worker.deployment.yaml) — `Deployment` — consumes Redis → writes Postgres
-- **Result** — Node.js results dashboard
-  - [result.deployment.yaml](result.deployment.yaml) — `Deployment` — 2 replicas, pod anti-affinity
-  - [result.service.yaml](result.service.yaml) — `Service` — ClusterIP on `80`
-  - [result.ingress.yaml](result.ingress.yaml) — `Ingress` — Traefik route for `result.dop.io`
-
-### Load Balancer
-
-- **Traefik** — reverse proxy & ingress controller (`kube-public`)
-  - [traefik.rbac.yaml](traefik.rbac.yaml) — `RBAC` — ServiceAccount + ClusterRole for the Kubernetes API
-  - [traefik.deployment.yaml](traefik.deployment.yaml) — `Deployment` — Traefik 2.7, 2 replicas, anti-affinity
-  - [traefik.service.yaml](traefik.service.yaml) — `Service` — NodePort `30021` (proxy) + `30042` (dashboard)
-
-### Bootstrap (local Minikube)
-
-- [bootstrap/hello-world.pod.yaml](bootstrap/hello-world.pod.yaml) — single pod with `PORT=8080` + exposed port
-- [bootstrap/hello-world.service.yaml](bootstrap/hello-world.service.yaml) — ClusterIP service for internal DNS
-- [bootstrap/hello-world.volume.yaml](bootstrap/hello-world.volume.yaml) — 512Mi PersistentVolume + PVC
-- [bootstrap/hello-world.deployment.yaml](bootstrap/hello-world.deployment.yaml) — pod converted into a Deployment
-
-### Infrastructure & Tooling
-
-- [terraform/main.tf](terraform/main.tf) — DOKS cluster (2 worker nodes)
-- [terraform/providers.tf](terraform/providers.tf) — DigitalOcean + local providers
-- [terraform/variables.tf](terraform/variables.tf) — region & cluster name variables
-- [terraform/outputs.tf](terraform/outputs.tf) — kubeconfig output + local file generation
-- [flake.nix](flake.nix) — Nix dev shell (kubectl, terraform, doctl…)
+Replicated services use **pod anti-affinity** to land on different nodes.
+Shared config lives in **ConfigMaps**; credentials in **Secrets** (rotate the
+placeholder values before any real deployment).
 
 ---
 
-## Live Deployment
+## Reference Deployment
 
-The stack runs on **DigitalOcean Kubernetes (DOKS)** — a 2-node pool (`s-2vcpu-4gb`, 2 vCPU / 4 GB each) provisioned end-to-end by Terraform, running Kubernetes `1.36.0-do.0` in the `fra1` region.
+The reusable stack has been **proven on DigitalOcean Kubernetes (DOKS)** — a
+2-node pool (`s-2vcpu-4gb`) provisioned end-to-end by Terraform in the `fra1`
+region. The screenshots below are from that reference run; OpsWarden's own
+screenshots will replace the application-level ones once it is deployed.
 
 <div align="center">
 
@@ -180,31 +113,17 @@ The stack runs on **DigitalOcean Kubernetes (DOKS)** — a 2-node pool (`s-2vcpu
 
 <img src="docs/insights.png" alt="DigitalOcean cluster insights graphs" width="100%" />
 
-</div>
+<br /><br />
 
----
+**Traefik — routers & services healthy, 100% success on `:80` / `:8080`**
 
-## The Application in Action
-
-With the cluster live, the whole event-driven flow can be followed end-to-end straight from the browser.
-
-A voter lands on the **Poll** page and picks their favorite DevOps tool. The footer is the interesting part — `Processed by container ID poll-c47f67fb-pfslb` — proof the request was served by *one of the two* load-balanced Flask pods, not a single static server.
-
-<div align="center">
-<img src="docs/poll.png" alt="Poll voting page — What's your favorite DevOps tool?" width="100%" />
-</div>
-
-That request never reached a pod directly: it entered through **Traefik**, which had discovered the `poll.dop.io` and `result.dop.io` routes on its own via the `KubernetesIngress` provider. Its dashboard shows every HTTP router and service healthy — 100% success, zero errors — on the `:80` (web) and `:8080` (dashboard) entrypoints.
-
-<div align="center">
 <img src="docs/traefik.png" alt="Traefik dashboard — routers and services healthy" width="100%" />
+
 </div>
 
-From there the vote travelled the full pipeline — Flask → Redis queue → Java worker → PostgreSQL — and the **Result** dashboard, reading live from the database, reflects it instantly: **ANSIBLE at 100%**. The symphony plays in tune.
-
-<div align="center">
-<img src="docs/result.png" alt="Result dashboard — ANSIBLE 100%" width="100%" />
-</div>
+> `docs/poll.png` and `docs/result.png` show the reference workload (a voting
+> app) that validated the cluster end-to-end. They will be replaced by OpsWarden
+> screenshots once the application services are deployed.
 
 ---
 
@@ -216,78 +135,45 @@ From there the vote travelled the full pipeline — Flask → Redis queue → Ja
 - A [DigitalOcean](https://www.digitalocean.com/) account with an API token
 - [Git](https://git-scm.com/)
 
-### Step 1 — Clone & enter environment
+### 1 — Clone & enter the environment
 
 ```bash
-git clone <repo-url> && cd bernstein
-cp .env.example .env   # Add your DigitalOcean API token
-nix develop            # Loads kubectl, terraform, k9s, helm
+git clone git@github.com:RomeoCavazza/opswarden-ops.git && cd opswarden-ops
+cp .env.example .env   # add your DigitalOcean API token
+nix develop            # loads kubectl, terraform, k9s, helm…
 ```
 
-### Step 2 — Provision cloud cluster
+### 2 — Provision the cluster
 
 ```bash
 cd terraform
 terraform init
-terraform apply        # Creates a 2-worker DOKS cluster (~5 min)
+terraform apply        # creates a 2-worker DOKS cluster (~5 min)
 cd ..
 export KUBECONFIG=$(pwd)/kubeconfig
 ```
 
-### Step 3 — Deploy the stack
+### 3 — Deploy the infrastructure layer
 
 ```bash
-# Monitoring
-kubectl apply -f cadvisor.daemonset.yaml
-
-# Data layer
-kubectl apply -f postgres.secret.yaml \
-               -f postgres.configmap.yaml \
-               -f postgres.volume.yaml \
-               -f postgres.deployment.yaml \
-               -f postgres.service.yaml
-
-kubectl apply -f redis.configmap.yaml \
-               -f redis.deployment.yaml \
-               -f redis.service.yaml
-
-# Application layer
-kubectl apply -f poll.deployment.yaml \
-               -f worker.deployment.yaml \
-               -f result.deployment.yaml \
-               -f poll.service.yaml \
-               -f result.service.yaml \
-               -f poll.ingress.yaml \
-               -f result.ingress.yaml
-
-# Load balancer
-kubectl apply -f traefik.rbac.yaml \
-               -f traefik.deployment.yaml \
-               -f traefik.service.yaml
+kubectl apply -f k8s/observability/cadvisor.daemonset.yaml
+kubectl apply -f k8s/postgres/
+kubectl apply -f k8s/redis/
+kubectl apply -f k8s/traefik/
 ```
 
-### Step 4 — Initialize the database
+### 4 — Deploy the application layer
+
+> The OpsWarden app services (`server`, `client-web`, `investigation`, `worker`)
+> are **placeholders** for now. Once their images are published, fill the
+> manifests in `k8s/<service>/` and apply them:
 
 ```bash
-POSTGRES_POD=$(kubectl get pods -l app=postgres -o jsonpath='{.items[0].metadata.name}')
-echo "CREATE TABLE votes (id text PRIMARY KEY, vote text NOT NULL);" | \
-  kubectl exec -i $POSTGRES_POD -c postgres -- psql -U postgres -d postgres
+# kubectl apply -f k8s/server/
+# kubectl apply -f k8s/client-web/
+# kubectl apply -f k8s/investigation/
+# kubectl apply -f k8s/worker/
 ```
-
-### Step 5 — Configure local DNS
-
-```bash
-NODES=$(kubectl get nodes -o jsonpath='{ $.items[*].status.addresses[?(@.type=="ExternalIP")].address }')
-echo "$NODES poll.dop.io result.dop.io" | sudo tee -a /etc/hosts
-```
-
-### Step 6 — Access the application
-
-| Endpoint | URL |
-|----------|-----|
-| Vote | `http://poll.dop.io:30021` |
-| Results | `http://result.dop.io:30021` |
-| Traefik Dashboard | `http://localhost:30042` |
 
 ### Teardown
 
@@ -299,6 +185,6 @@ cd terraform && terraform destroy
 
 <div align="center">
 
-*Epitech Seminar DOP — T-DOP-600*
+*OpsWarden — cloud showcase. Never a prerequisite to run the product.*
 
 </div>

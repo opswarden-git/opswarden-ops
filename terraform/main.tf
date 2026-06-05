@@ -3,7 +3,7 @@
 # source renvoyer la dernière version supportée du moment.
 data "digitalocean_kubernetes_versions" "current" {}
 
-resource "digitalocean_kubernetes_cluster" "bernstein" {
+resource "digitalocean_kubernetes_cluster" "opswarden" {
   name    = var.cluster_name
   region  = var.region
   version = data.digitalocean_kubernetes_versions.current.latest_version
