@@ -1,0 +1,5 @@
+docs
+flake.lock
+terraform/.terraform
+*.tfstate
+*.tfstate.*
