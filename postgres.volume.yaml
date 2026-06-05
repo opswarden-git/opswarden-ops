@@ -1,0 +1,15 @@
+# Sur DigitalOcean (DOKS), le stockage est provisionné dynamiquement par le
+# CSI driver via la StorageClass "do-block-storage". On ne définit donc PAS de
+# PersistentVolume statique : il est créé automatiquement à la demande du PVC.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: do-block-storage
+  resources:
+    requests:
+      storage: 1Gi

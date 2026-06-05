@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: kube-public
+  labels:
+    app: traefik
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik-ingress-controller
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - traefik
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: traefik
+          image: traefik:2.7
+          args:
+            - --api.insecure=true
+            - --providers.kubernetesingress=true
+            - --entrypoints.web.address=:80
+            - --entrypoints.traefik.address=:8080
+          ports:
+            - name: web
+              containerPort: 80
+            - name: dashboard
+              containerPort: 8080
+      restartPolicy: Always
