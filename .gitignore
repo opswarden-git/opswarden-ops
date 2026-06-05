@@ -1,0 +1,11 @@
+# Sécurité : Variables d'environnement locales
+.env
+
+# Infrastructure : Fichiers locaux de Terraform / OpenTofu
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+
+# Fichiers de configuration Kubernetes locaux générés
+kubeconfig
