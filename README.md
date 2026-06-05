@@ -1,8 +1,8 @@
 <div align="center">
 
-# OpsWarden — Ops
+<img src="docs/heroicon.png" alt="OpsWarden" width="120" />
 
-### Infrastructure & Deployment
+# OpsWarden — Ops
 
 *The cloud deployment layer for OpsWarden — Kubernetes on DigitalOcean, provisioned by Terraform, fronted by Traefik.*
 
