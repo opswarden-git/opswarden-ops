@@ -44,8 +44,10 @@ cloud showcase** — it must never be a prerequisite to run or grade the product
 
 > Status: this repo is derived from a **proven reference deployment** (a working
 > DOKS + Traefik + Postgres/Redis stack). The reusable infrastructure manifests
-> are in place; the OpsWarden application services are **placeholders** until
-> their images are published. See the per-service status below.
+> are in place — their images modernized (Postgres 18 / Redis 8 / Traefik v3),
+> pending re-validation on a live cluster — while the OpsWarden application
+> services are **placeholders** until their images are published. Full re-targeting
+> once the core + AI SRE are deployable. See the per-service status below.
 
 ---
 
@@ -76,16 +78,16 @@ opswarden-ops/
 
 ## Services
 
-| Service           |                                       Tech                                       | Status                                      |
-| ----------------- | :------------------------------------------------------------------------------: | ------------------------------------------- |
-| **server**        |    <img src="https://skillicons.dev/icons?i=rust" height="22" /> Rust / Axum     | placeholder — `k8s/server/`                 |
-| **client-web**    |     <img src="https://skillicons.dev/icons?i=nextjs" height="22" /> Next.js      | placeholder — `k8s/client-web/` (or Vercel) |
-| **investigation** | <img src="https://skillicons.dev/icons?i=python" height="22" /> FastAPI (AI SRE) | placeholder — `k8s/investigation/`          |
-| **worker**        |                                      async                                       | placeholder — `k8s/worker/`                 |
-| **PostgreSQL**    | <img src="https://skillicons.dev/icons?i=postgres" height="22" /> `postgres:13`  | ready — `k8s/postgres/`                     |
-| **Redis**         |    <img src="https://skillicons.dev/icons?i=redis" height="22" /> `redis:5.0`    | ready — `k8s/redis/`                        |
-| **Traefik**       |                                  `traefik:2.7`                                   | ready — `k8s/traefik/`                      |
-| **cAdvisor**      |  <img src="https://skillicons.dev/icons?i=prometheus" height="22" /> monitoring  | ready — `k8s/observability/`                |
+| Service           |                                          Tech                                          | Status                                      |
+| ----------------- | :------------------------------------------------------------------------------------: | ------------------------------------------- |
+| **server**        |       <img src="https://skillicons.dev/icons?i=rust" height="22" /> Rust / Axum        | placeholder — `k8s/server/`                 |
+| **client-web**    |        <img src="https://skillicons.dev/icons?i=nextjs" height="22" /> Next.js         | placeholder — `k8s/client-web/` (or Vercel) |
+| **investigation** |    <img src="https://skillicons.dev/icons?i=python" height="22" /> FastAPI (AI SRE)    | placeholder — `k8s/investigation/`          |
+| **worker**        |                                         async                                          | placeholder — `k8s/worker/`                 |
+| **PostgreSQL**    | <img src="https://skillicons.dev/icons?i=postgres" height="22" /> `postgres:18-alpine` | ready — `k8s/postgres/`                     |
+| **Redis**         |    <img src="https://skillicons.dev/icons?i=redis" height="22" /> `redis:8-alpine`     | ready — `k8s/redis/`                        |
+| **Traefik**       |                                     `traefik:v3.7`                                     | ready — `k8s/traefik/`                      |
+| **cAdvisor**      |     <img src="https://skillicons.dev/icons?i=prometheus" height="22" /> monitoring     | ready — `k8s/observability/`                |
 
 Replicated services use **pod anti-affinity** to land on different nodes.
 Shared config lives in **ConfigMaps**; credentials in **Secrets** (rotate the
