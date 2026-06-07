@@ -189,9 +189,7 @@ cd terraform && terraform destroy
 ```
 
 ---
+## License
 
-<div align="center">
-
-_OpsWarden — cloud showcase. Never a prerequisite to run the product._
-
-</div>
+OpsWarden is distributed under the **Apache License 2.0**. See
+[LICENSE](LICENSE).
