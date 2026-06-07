@@ -33,7 +33,10 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       containers:
         - name: traefik
-          image: traefik:2.7
+          # Traefik v3 — the CLI flags below (api.insecure, kubernetesingress,
+          # entrypoints) are v2/v3-stable; re-validate on a live cluster when the
+          # app-service manifests stop being placeholders.
+          image: traefik:v3.7
           args:
             - --api.insecure=true
             - --providers.kubernetesingress=true
