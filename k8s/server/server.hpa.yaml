@@ -1,0 +1,24 @@
+# HorizontalPodAutoscaler pour le server OpsWarden (basé CPU).
+# TEMPLATE — requiert (1) le Deployment server avec resources.requests.cpu
+# défini, et (2) metrics-server (DOKS le fournit ; en local `make metrics`).
+# Scaler au-delà des replicas de base suppose une anti-affinity *preferred*
+# (pas required) sur le Deployment server (cf. scripts/soft-affinity.sh).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: server
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: server
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50

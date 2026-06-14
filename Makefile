@@ -1,0 +1,170 @@
+# OpsWarden Ops — runner unique du repo (infra). Convention projet : ops = Make,
+# app/web = Just (un seul runner par repo, jamais deux empilés).
+# Cycle de vie : provision -> deploy -> harden -> verify -> destroy.
+# Inclut aussi la qualité (fmt / validate / lint), repliée ici depuis l'ex-Justfile.
+#
+# Démarrage rapide (depuis ce dossier) :
+#   cp .env.example .env && $EDITOR .env   # poser DIGITALOCEAN_TOKEN
+#   nix develop                            # ou: export $(grep -v '^#' .env | xargs)
+#   make all                               # infra + deploy (couche prête)
+#   make hosts && make smoke               # DNS local + smoke test
+#
+# Placeholder : les services applicatifs (server/client-web/investigation/worker)
+# ne sont pas encore déployés. `deploy` n'applique que la couche prête
+# (observability + postgres + redis + traefik) ; la couche app est commentée.
+
+# Recettes POSIX sh (pas de dépendance dure à /bin/bash : NixOS / images minimales).
+TF_DIR         := terraform
+# Kubeconfig par défaut : ~/.kube/config (ce que minikube, kubectl et k9s utilisent).
+# DOKS est le cas particulier : Terraform écrit ./kubeconfig, utilisé par all/infra.
+KUBECONFIG     ?= $(HOME)/.kube/config
+export KUBECONFIG
+DOKS_KUBECONFIG := $(CURDIR)/kubeconfig
+
+# minikube écrit son contexte dans ~/.kube/config (le défaut). 2 nœuds reflètent
+# DOKS pour que l'anti-affinity required (2 replicas) marche tel quel.
+MINIKUBE_NODES ?= 2
+
+# Hôtes publics (placeholders : .example ne résout pas, mappé via /etc/hosts).
+WEB_HOST ?= app.opswarden.example
+API_HOST ?= api.opswarden.example
+
+# Manifests groupés par phase de déploiement.
+MONITORING := k8s/observability/cadvisor.daemonset.yaml
+DATA       := k8s/postgres/postgres.secret.yaml k8s/postgres/postgres.configmap.yaml \
+              k8s/postgres/postgres.volume.yaml k8s/postgres/postgres.deployment.yaml \
+              k8s/postgres/postgres.service.yaml \
+              k8s/redis/redis.configmap.yaml k8s/redis/redis.deployment.yaml \
+              k8s/redis/redis.service.yaml
+LB         := k8s/traefik/traefik.ingressclass.yaml k8s/traefik/traefik.rbac.yaml \
+              k8s/traefik/traefik.deployment.yaml k8s/traefik/traefik.service.yaml
+# Couche app (placeholders) — décommenter au fil des images publiées :
+# APP      := k8s/server/ k8s/client-web/ k8s/investigation/ k8s/worker/
+
+.DEFAULT_GOAL := help
+.PHONY: help all infra kubeconfig deploy db-check hosts smoke status destroy \
+        fmt fmt-check validate tf-lint \
+        metrics hpa pdb load harden soft-affinity hard-affinity \
+        minikube minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
+
+help: ## Affiche cette aide
+	@echo "OpsWarden Ops — cibles make :"
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | \
+		awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+
+all: infra ## DOKS : provisionne le cluster puis déploie la couche prête
+	$(MAKE) deploy KUBECONFIG=$(DOKS_KUBECONFIG)
+
+## --- Cœur ------------------------------------------------------------------
+
+infra: ## Provisionne le cluster DOKS via Terraform (écrit ./kubeconfig)
+	cd $(TF_DIR) && terraform init -input=false && terraform apply -auto-approve
+	@echo ">> Attente des nœuds Ready..."
+	KUBECONFIG=$(DOKS_KUBECONFIG) kubectl wait --for=condition=Ready nodes --all --timeout=300s
+
+kubeconfig: ## (Re)génère ./kubeconfig depuis l'état Terraform
+	cd $(TF_DIR) && terraform apply -auto-approve -target=local_file.kubeconfig
+
+deploy: ## Applique la couche prête (observability + data + traefik), dans l'ordre
+	kubectl apply -f $(MONITORING)
+	kubectl apply $(addprefix -f ,$(DATA))
+	@echo ">> Attente de postgres & redis..."
+	kubectl rollout status deploy/postgres --timeout=180s
+	kubectl rollout status deploy/redis --timeout=120s
+	kubectl apply $(addprefix -f ,$(LB))
+	kubectl -n kube-public rollout status deploy/traefik --timeout=120s
+	@echo ">> Couche app (server/client-web/investigation/worker) : placeholders, non déployée."
+
+db-check: ## Vérifie la connectivité Postgres (le schéma est géré par opswarden-server)
+	@POD=$$(kubectl get pods -l app=postgres -o jsonpath='{.items[0].metadata.name}'); \
+	echo ">> Test connexion sur le pod $$POD"; \
+	kubectl exec -i $$POD -c postgres -- sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "SELECT 1;"'
+
+hosts: ## Mappe l'IP d'un nœud -> hôtes web/api dans /etc/hosts (sudo)
+	@NODES=$$(kubectl get nodes -o jsonpath='{ $$.items[*].status.addresses[?(@.type=="ExternalIP")].address }'); \
+	IP=$$(echo $$NODES | awk '{print $$1}'); \
+	echo ">> $$IP -> $(WEB_HOST) $(API_HOST)"; \
+	echo "$$IP $(WEB_HOST) $(API_HOST)" | sudo tee -a /etc/hosts
+
+smoke: ## Smoke test bout-en-bout (Traefik + routes app best-effort)
+	WEB_HOST=$(WEB_HOST) API_HOST=$(API_HOST) ./scripts/smoke.sh
+
+status: ## État du cluster (pods / services / ingress, namespaces utiles)
+	kubectl get pods -o wide
+	kubectl get svc,ingress
+	kubectl -n kube-public get pods,svc -o wide
+	kubectl -n kube-system get ds cadvisor
+
+destroy: ## Détruit le cluster DOKS
+	cd $(TF_DIR) && terraform destroy -auto-approve
+
+## --- Qualité (ex-Justfile, ce que vérifie la CI) ---------------------------
+
+fmt: ## Formate yaml/md/json (prettier) + terraform fmt
+	npx --yes prettier --write "**/*.{yaml,yml,md,json}"
+	terraform -chdir=$(TF_DIR) fmt
+
+fmt-check: ## Vérifie le formatage sans rien modifier (miroir CI)
+	npx --yes prettier --check "**/*.{yaml,yml,md,json}"
+	terraform -chdir=$(TF_DIR) fmt -check
+
+validate: ## Valide les manifests k8s (kubeconform) + terraform
+	terraform -chdir=$(TF_DIR) validate || true
+	find k8s -name '*.yaml' -print0 | xargs -0 -I{} sh -c 'kubeconform -strict -summary "{}" || true'
+
+tf-lint: ## Lint terraform (tflint)
+	cd $(TF_DIR) && tflint || true
+
+## --- Durcissement production -----------------------------------------------
+
+metrics: ## Assure la présence de metrics-server (les clusters managés l'ont souvent)
+	@kubectl top nodes >/dev/null 2>&1 && echo "metrics-server déjà présent" || \
+		kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+pdb: ## Applique les PodDisruptionBudgets (traefik prêt ; server si déployé)
+	kubectl apply -f k8s/traefik/traefik.pdb.yaml
+	@kubectl get deploy server >/dev/null 2>&1 \
+		&& kubectl apply -f k8s/server/server.pdb.yaml \
+		|| echo ">> deploy/server absent — k8s/server/server.pdb.yaml prêt à appliquer plus tard."
+	kubectl get pdb -A
+
+hpa: metrics ## Applique le HPA du server (sauté tant que le Deployment n'existe pas)
+	@kubectl get deploy server >/dev/null 2>&1 \
+		&& { kubectl apply -f k8s/server/server.hpa.yaml; kubectl get hpa; } \
+		|| echo ">> deploy/server absent — k8s/server/server.hpa.yaml prêt à appliquer plus tard."
+
+load: ## Génère de la charge HTTP (test autoscaling) contre l'hôte web
+	WEB_URL=http://$(WEB_HOST):30021 ./scripts/load.sh
+
+soft-affinity: ## Relâche l'anti-affinity required->preferred (clusters nodes < replicas)
+	./scripts/soft-affinity.sh on
+
+hard-affinity: ## Restaure l'anti-affinity stricte (preferred->required)
+	./scripts/soft-affinity.sh off
+
+harden: pdb hpa ## Applique PDB + HPA (ce qui est prêt)
+
+## --- Cluster local (minikube, sans DigitalOcean) ---------------------------
+
+minikube: minikube-up minikube-deploy ## One-shot : cluster local + couche prête
+	@echo ">> Fait. Ensuite : 'make minikube-smoke' pour vérifier."
+
+minikube-up: ## Démarre minikube (driver docker) + metrics-server + storage
+	minikube start --nodes $(MINIKUBE_NODES) --driver=docker \
+		--addons=metrics-server,default-storageclass,storage-provisioner
+
+minikube-deploy: ## Déploie la couche prête sur le minikube courant
+	$(MAKE) deploy
+
+minikube-hosts: ## Mappe l'IP minikube -> hôtes web/api (/etc/hosts ; NixOS-aware)
+	@IP=$$(minikube ip); LINE="$$IP $(WEB_HOST) $(API_HOST)"; \
+	echo "$$LINE" | sudo tee -a /etc/hosts 2>/dev/null \
+	  || { echo ">> /etc/hosts en lecture seule (NixOS). Ajouter dans configuration.nix :"; \
+	       echo "     networking.extraHosts = \"$$LINE\";"; \
+	       echo ">> Ou vérifier sans /etc/hosts : make minikube-smoke"; }
+
+minikube-smoke: ## Smoke test minikube sans /etc/hosts (curl --resolve)
+	RESOLVE_IP=$$(minikube ip) WEB_HOST=$(WEB_HOST) API_HOST=$(API_HOST) ./scripts/smoke.sh
+
+minikube-down: ## Supprime le cluster minikube local
+	minikube delete
