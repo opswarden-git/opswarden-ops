@@ -4,8 +4,13 @@
 # Quand l'image existera (ghcr.io/romeocavazza/opswarden-server) et que l'app
 # sera stable, remplir ce dossier avec :
 #   - deployment.yaml : Deployment (replicas, pod anti-affinity, env via
-#                       ConfigMap/Secret, probes /health)
+#                       ConfigMap/Secret, probes /health, resources.requests.cpu)
 #   - service.yaml    : Service ClusterIP sur :8080
-#   - ingress.yaml    : route Traefik (ex. api.opswarden.example)
+#   - ingress.yaml    : route Traefik (ex. api.opswarden.example),
+#                       spec.ingressClassName: traefik (cf. k8s/traefik/)
+#
+# Durcissement deja pret a appliquer (templates dans ce dossier) :
+#   - server.hpa.yaml : HorizontalPodAutoscaler CPU (besoin de requests.cpu)
+#   - server.pdb.yaml : PodDisruptionBudget (>=1 replica au drain)
 #
 # Exemple de service reel et complet : voir k8s/postgres/.

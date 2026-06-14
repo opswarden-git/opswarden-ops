@@ -1,0 +1,11 @@
+# Remplaçant moderne de l'annotation dépréciée `kubernetes.io/ingress.class`.
+# Les Ingress applicatifs (server/client-web) référencent ceci via
+# `spec.ingressClassName: traefik`. Ressource cluster-scoped ; la ClusterRole
+# Traefik (k8s/traefik/traefik.rbac.yaml) accorde déjà la lecture des
+# `ingressclasses`.
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: traefik
+spec:
+  controller: traefik.io/ingress-controller

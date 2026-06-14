@@ -57,17 +57,19 @@ cloud showcase** — it must never be a prerequisite to run or grade the product
 opswarden-ops/
 │
 ├── k8s/
-│   ├── server/             # OpsWarden server (Rust/Axum)  — placeholder
+│   ├── server/             # OpsWarden server (Rust/Axum) + HPA/PDB tmpl — placeholder
 │   ├── client-web/         # Next.js client (or Vercel)    — placeholder
 │   ├── investigation/      # AI SRE agent (RAG/FastAPI)     — placeholder
 │   ├── worker/             # async Redis workers           — placeholder
 │   ├── postgres/           # PostgreSQL                     — ready
 │   ├── redis/              # Redis                          — ready
-│   ├── traefik/            # ingress controller & LB        — ready
+│   ├── traefik/            # ingress controller & LB (+ IngressClass, PDB) — ready
 │   └── observability/      # cAdvisor (+ prom/grafana/loki) — partial
 │
 ├── terraform/              # DOKS cluster provisioning (main/outputs/providers/variables.tf)
+├── scripts/                # smoke.sh, load.sh, soft-affinity.sh (ops helpers)
 ├── docs/                   # architecture + cluster screenshots
+├── Makefile                # single runner: provision → deploy → harden → verify → destroy + fmt/validate/lint
 ├── flake.nix / flake.lock  # Nix dev shell (kubectl, terraform, k9s, helm…)
 ├── .env                    # API tokens (git-ignored)
 ├── LICENSE / NOTICE        # Apache-2.0
@@ -136,6 +138,14 @@ screenshots will replace the application-level ones once it is deployed.
 
 ## Installation & Configuration
 
+> **One-command path.** The whole lifecycle is automated by the
+> [`Makefile`](Makefile): `make all` (provision + deploy the ready layer),
+> `make hosts && make smoke` (local DNS + end-to-end check), `make harden`
+> (PDB/HPA), `make destroy`. Run `make help` for every target. **No cloud
+> account?** Run the same manifests for free on a local 2-node minikube:
+> `make minikube`, then `make minikube-smoke`. The manual steps below spell out
+> the same flow.
+
 ### Prerequisites
 
 - [Nix](https://nixos.org/download.html) package manager
@@ -185,8 +195,35 @@ kubectl apply -f k8s/traefik/
 ### Teardown
 
 ```bash
-cd terraform && terraform destroy
+cd terraform && terraform destroy   # or: make destroy
 ```
+
+---
+
+## Production hardening
+
+Reusable patterns ported from the reference deployment, applied with `make harden`:
+
+- **Disruption budgets** — [`k8s/traefik/traefik.pdb.yaml`](k8s/traefik/traefik.pdb.yaml)
+  keeps ≥1 Traefik replica during node drain; [`k8s/server/server.pdb.yaml`](k8s/server/server.pdb.yaml)
+  is the template for the API server.
+- **Autoscaling** — [`k8s/server/server.hpa.yaml`](k8s/server/server.hpa.yaml)
+  (CPU-based HPA template), enabled by `requests.cpu` + metrics-server
+  (`make metrics` / `make load`).
+- **Modern ingress** — [`k8s/traefik/traefik.ingressclass.yaml`](k8s/traefik/traefik.ingressclass.yaml)
+  replaces the deprecated `kubernetes.io/ingress.class` annotation; app Ingresses
+  use `spec.ingressClassName: traefik`.
+- **Strict HA** — replicated services use _required_ pod anti-affinity (one
+  replica per node). On clusters where `nodes < replicas`,
+  [`scripts/soft-affinity.sh`](scripts/soft-affinity.sh) (`make soft-affinity`)
+  relaxes it to _preferred_ without editing the manifests.
+- **Smoke & load** — [`scripts/smoke.sh`](scripts/smoke.sh) checks the public
+  path (Traefik + app routes, NixOS/minikube aware) and
+  [`scripts/load.sh`](scripts/load.sh) drives autoscaling.
+
+> HPA/PDB for the app tier (`server`, `client-web`) are **templates** until those
+> images are deployed — `make harden` applies what is ready (Traefik) and skips
+> the rest with a notice.
 
 ---
 
