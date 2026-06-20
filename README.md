@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="../docs/png/heroicon.png" alt="OpsWarden" width="120" />
+<img src="assets/heroicon.png" alt="OpsWarden" width="120" />
 
 # OpsWarden — Ops
 
