@@ -40,7 +40,7 @@ a Kubernetes deployment on **DigitalOcean (DOKS)**, provisioned end-to-end by
 
 It is **separate from the product** (`opswarden-app`) and **deliberately optional**:
 OpsWarden runs with a single `docker compose up`. This repo is the **portfolio
-cloud showcase** — it must never be a prerequisite to run or grade the product.
+cloud showcase** — it must never be a prerequisite to run the product.
 
 > Status: this repo is derived from a **proven reference deployment** (a working
 > DOKS + Traefik + Postgres/Redis stack). The reusable infrastructure manifests
