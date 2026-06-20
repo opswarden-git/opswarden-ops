@@ -21,7 +21,7 @@
 
 <br /><br />
 
-<img src="docs/architecture.png" alt="Reference cluster topology" width="100%" />
+<img src="assets/architecture.png" alt="Reference cluster topology" width="100%" />
 
 <sub><i>Reference cluster topology — to be replaced by OpsWarden's own diagram.</i></sub>
 
@@ -68,7 +68,7 @@ opswarden-ops/
 │
 ├── terraform/              # DOKS cluster provisioning (main/outputs/providers/variables.tf)
 ├── scripts/                # smoke.sh, load.sh, soft-affinity.sh (ops helpers)
-├── docs/                   # architecture + cluster screenshots
+├── assets/                 # architecture + cluster screenshots
 ├── Makefile                # single runner: provision → deploy → harden → verify → destroy + fmt/validate/lint
 ├── flake.nix / flake.lock  # Nix dev shell (kubectl, terraform, k9s, helm…)
 ├── .env                    # API tokens (git-ignored)
@@ -108,29 +108,29 @@ screenshots will replace the application-level ones once it is deployed.
 
 **Node pool — 2 / 2 nodes running**
 
-<img src="docs/cluster-overview.png" alt="DOKS node pool status — 2/2 running" width="100%" />
+<img src="assets/cluster-overview.png" alt="DOKS node pool status — 2/2 running" width="100%" />
 
 <br /><br />
 
 **Worker pool detail — provisioned & tagged by Terraform**
 
-<img src="docs/cluster-resources.png" alt="Worker pool nodes running on DigitalOcean" width="100%" />
+<img src="assets/cluster-resources.png" alt="Worker pool nodes running on DigitalOcean" width="100%" />
 
 <br /><br />
 
 **Cluster insights — CPU, load, memory, disk & I/O**
 
-<img src="docs/insights.png" alt="DigitalOcean cluster insights graphs" width="100%" />
+<img src="assets/insights.png" alt="DigitalOcean cluster insights graphs" width="100%" />
 
 <br /><br />
 
 **Traefik — routers & services healthy, 100% success on `:80` / `:8080`**
 
-<img src="docs/traefik.png" alt="Traefik dashboard — routers and services healthy" width="100%" />
+<img src="assets/traefik.png" alt="Traefik dashboard — routers and services healthy" width="100%" />
 
 </div>
 
-> `docs/poll.png` and `docs/result.png` show the reference workload (a voting
+> `assets/poll.png` and `assets/result.png` show the reference workload (a voting
 > app) that validated the cluster end-to-end. They will be replaced by OpsWarden
 > screenshots once the application services are deployed.
 
