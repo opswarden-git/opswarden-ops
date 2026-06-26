@@ -40,7 +40,13 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir=terraform validate
 
-      # À activer quand les manifests seront réels (pas des placeholders) :
-      # - name: Validate manifests (kubeconform)
-      #   run: |
-      #     find k8s -name '*.yaml' | xargs kubeconform -strict -ignore-missing-schemas -summary
+      - name: Validate Kubernetes manifests
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            ghcr.io/yannh/kubeconform:v0.7.0 \
+            -strict \
+            -ignore-missing-schemas \
+            -summary \
+            $(find k8s -name '*.yaml' | sort)

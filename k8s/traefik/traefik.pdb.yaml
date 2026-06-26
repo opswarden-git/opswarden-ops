@@ -1,7 +1,8 @@
 # PodDisruptionBudget — garde >=1 replica Traefik en service pendant les
 # perturbations volontaires (drain de nœud, rolling update, éviction). Traefik
 # tourne en 2 replicas avec anti-affinity required ; ce PDB protège l'entrée
-# publique du cluster.
+# publique du cluster. L'anti-affinity du Deployment est volontairement
+# "preferred" pour que les labs single-node restent déployables.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

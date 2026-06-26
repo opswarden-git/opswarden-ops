@@ -40,10 +40,12 @@ LB         := k8s/traefik/traefik.ingressclass.yaml k8s/traefik/traefik.rbac.yam
               k8s/traefik/traefik.deployment.yaml k8s/traefik/traefik.service.yaml
 # Couche app (placeholders) — décommenter au fil des images publiées :
 # APP      := k8s/server/ k8s/client-web/ k8s/investigation/ k8s/worker/
+READY_MANIFESTS := $(MONITORING) $(DATA) $(LB)
+K8S_MANIFESTS := $(shell find k8s -name '*.yaml' | sort)
 
 .DEFAULT_GOAL := help
 .PHONY: help all infra kubeconfig deploy db-check hosts smoke status destroy \
-        fmt fmt-check validate tf-lint \
+        fmt fmt-check validate dry-run tf-lint \
         metrics hpa pdb load harden soft-affinity hard-affinity \
         minikube minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
 
@@ -108,9 +110,19 @@ fmt-check: ## Vérifie le formatage sans rien modifier (miroir CI)
 	npx --yes prettier --check "**/*.{yaml,yml,md,json}"
 	terraform -chdir=$(TF_DIR) fmt -check
 
-validate: ## Valide les manifests k8s (kubeconform) + terraform
-	terraform -chdir=$(TF_DIR) validate || true
-	find k8s -name '*.yaml' -print0 | xargs -0 -I{} sh -c 'kubeconform -strict -summary "{}" || true'
+validate: ## Valide les manifests k8s hors-cluster (kubeconform) + terraform
+	terraform -chdir=$(TF_DIR) init -backend=false -input=false
+	terraform -chdir=$(TF_DIR) validate
+	kubeconform -strict -ignore-missing-schemas -summary $(K8S_MANIFESTS)
+
+dry-run: ## Simule l'application réelle contre un cluster vivant (ignore placeholders)
+	@echo ">> Server-side dry-run de la couche prête (observability + data + traefik)"
+	@timeout 8s kubectl --request-timeout=3s cluster-info >/dev/null 2>/dev/null || { \
+		echo ">> Cluster Kubernetes inaccessible via KUBECONFIG=$(KUBECONFIG)."; \
+		echo ">> Lance minikube ou pointe KUBECONFIG vers DOKS, puis relance make dry-run."; \
+		exit 1; \
+	}
+	kubectl --request-timeout=10s apply --dry-run=server $(addprefix -f ,$(READY_MANIFESTS))
 
 tf-lint: ## Lint terraform (tflint)
 	cd $(TF_DIR) && tflint || true
