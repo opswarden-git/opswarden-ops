@@ -23,28 +23,49 @@ spec:
       serviceAccountName: traefik-ingress-controller
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - traefik
-              topologyKey: "kubernetes.io/hostname"
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - traefik
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: traefik
-          # Traefik v3 — the CLI flags below (api.insecure, kubernetesingress,
-          # entrypoints) are v2/v3-stable; re-validate on a live cluster when the
-          # app-service manifests stop being placeholders.
           image: traefik:v3.7
           args:
-            - --api.insecure=true
             - --providers.kubernetesingress=true
+            - --providers.kubernetesingress.ingressclass=traefik
             - --entrypoints.web.address=:80
-            - --entrypoints.traefik.address=:8080
+            - --ping=true
+            - --ping.entrypoint=web
           ports:
             - name: web
               containerPort: 80
-            - name: dashboard
-              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: web
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: web
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
       restartPolicy: Always

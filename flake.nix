@@ -20,10 +20,13 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             kubectl
+            kubeconform
             terraform
+            tflint
             k9s
             kubernetes-helm
             minikube
+            nodejs_22
           ];
 
           shellHook = ''
