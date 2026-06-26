@@ -5,8 +5,8 @@
 # OpsWarden — Ops
 
 <p>
-  <a href="https://github.com/RomeoCavazza/opswarden-ops/actions/workflows/ops-ci.yml"><img src="https://github.com/RomeoCavazza/opswarden-ops/actions/workflows/ops-ci.yml/badge.svg" alt="Ops CI" /></a>
-  <img src="https://img.shields.io/github/v/release/RomeoCavazza/opswarden-ops?style=flat-square&label=release" alt="Release" />
+  <a href="https://github.com/opswarden-git/opswarden-ops/actions/workflows/ops-ci.yml"><img src="https://github.com/opswarden-git/opswarden-ops/actions/workflows/ops-ci.yml/badge.svg" alt="Ops CI" /></a>
+  <img src="https://img.shields.io/github/v/release/opswarden-git/opswarden-ops?style=flat-square&label=release" alt="Release" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-F4C430?style=flat-square" alt="License: Apache 2.0" /></a>
   <img src="https://img.shields.io/badge/status-baseline-2F2F2F?style=flat-square" alt="Status: baseline" />
 </p>
@@ -155,7 +155,7 @@ screenshots will replace the application-level ones once it is deployed.
 ### 1 — Clone & enter the environment
 
 ```bash
-git clone git@github.com:RomeoCavazza/opswarden-ops.git && cd opswarden-ops
+git clone git@github.com:opswarden-git/opswarden-ops.git && cd opswarden-ops
 cp .env.example .env   # add your DigitalOcean API token
 nix develop            # loads kubectl, terraform, k9s, helm…
 ```

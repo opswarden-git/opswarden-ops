@@ -1,7 +1,7 @@
 # OpsWarden -- server (Rust / Axum) -- PLACEHOLDER (pas encore deploye en k8s).
 #
 # Le serveur applicatif n'a pas encore d'image publiee ni de deploiement cloud.
-# Quand l'image existera (ghcr.io/romeocavazza/opswarden-server) et que l'app
+# Quand l'image existera (ghcr.io/opswarden-git/opswarden-server) et que l'app
 # sera stable, remplir ce dossier avec :
 #   - deployment.yaml : Deployment (replicas, pod anti-affinity, env via
 #                       ConfigMap/Secret, probes /health, resources.requests.cpu)
