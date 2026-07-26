@@ -27,6 +27,8 @@
             kubernetes-helm
             minikube
             nodejs_22
+            sops
+            age
           ];
 
           shellHook = ''
@@ -68,6 +70,8 @@ EOF
             check_tool k9s
             check_tool helm
             check_tool terraform
+            check_tool sops
+            check_tool age
 
             echo ""
             echo -e "\033[1;33m--- DIGITALOCEAN API STATUS ---\033[0m"

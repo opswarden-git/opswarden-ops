@@ -1,0 +1,10 @@
+# Exemple de fichier .sops.yaml.
+# À renommer en .sops.yaml et à configurer avec vos vraies clés publiques age.
+creation_rules:
+  - path_regex: 'k8s/.*\.secret\.sops\.yaml$'
+    encrypted_regex: '^(data|stringData)$'
+    # Liste des clés publiques autorisées à déchiffrer.
+    # Remplacez par les clés publiques réelles (opérateurs + récupération).
+    age: >-
+      age1_REPLACE_WITH_OPERATOR_PUBLIC_KEY,
+      age1_REPLACE_WITH_RECOVERY_PUBLIC_KEY

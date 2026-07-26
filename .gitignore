@@ -8,3 +8,8 @@ terraform.tfstate.backup
 
 # Fichiers de configuration Kubernetes locaux générés
 kubeconfig
+
+# Protection des secrets en clair
+*.secret.yaml
+!*.secret.example.yaml
+!*.secret.sops.yaml

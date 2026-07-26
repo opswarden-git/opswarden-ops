@@ -45,7 +45,8 @@ K8S_MANIFESTS := $(shell find k8s -name '*.yaml' | sort)
 
 .DEFAULT_GOAL := help
 .PHONY: help all infra kubeconfig deploy db-check hosts smoke status destroy \
-        fmt fmt-check validate dry-run tf-lint \
+        fmt fmt-check validate dry-run tf-lint check-plaintext-secret-manifests \
+        secrets-dry-run secrets-apply \
         metrics hpa pdb load harden soft-affinity hard-affinity \
         minikube minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
 
@@ -110,7 +111,7 @@ fmt-check: ## Vérifie le formatage sans rien modifier (miroir CI)
 	npx --yes prettier --check "**/*.{yaml,yml,md,json}"
 	terraform -chdir=$(TF_DIR) fmt -check
 
-validate: ## Valide les manifests k8s hors-cluster (kubeconform) + terraform
+validate: check-plaintext-secret-manifests ## Valide les manifests k8s hors-cluster (kubeconform) + terraform
 	terraform -chdir=$(TF_DIR) init -backend=false -input=false
 	terraform -chdir=$(TF_DIR) validate
 	kubeconform -strict -ignore-missing-schemas -summary $(K8S_MANIFESTS)
@@ -180,3 +181,51 @@ minikube-smoke: ## Smoke test minikube sans /etc/hosts (curl --resolve)
 
 minikube-down: ## Supprime le cluster minikube local
 	minikube delete
+
+## --- Gestion des secrets (SOPS/age) ----------------------------------------
+check-plaintext-secret-manifests: ## Vérifie la présence de manifestes de secrets en clair (pas un scanner global)
+	@echo ">> Vérification des manifestes de secrets en clair..."
+	@if git ls-files | grep -E '\.secret\.yaml$$' | grep -v '\.sops\.'; then \
+		if [ "$$(git ls-files | grep -E '\.secret\.yaml$$' | grep -v '\.sops\.' | grep -c 'k8s/postgres/postgres.secret.yaml')" -eq 1 ]; then \
+			echo ">> ATTENTION : k8s/postgres/postgres.secret.yaml est toujours toléré pendant l'Étape 2A."; \
+		else \
+			echo ">> ERREUR : Des secrets en clair non autorisés sont suivis par Git."; \
+			exit 1; \
+		fi \
+	fi
+	@echo ">> Les règles SOPS seront validées sur les fichiers *.sops.yaml."
+
+secrets-dry-run: ## Déchiffre et valide le secret sur le cluster sans l'appliquer (bash requis)
+	@bash -c 'set -euo pipefail; \
+	command -v sops >/dev/null || { echo ">> Erreur: sops introuvable"; exit 1; }; \
+	command -v kubectl >/dev/null || { echo ">> Erreur: kubectl introuvable"; exit 1; }; \
+	command -v kubeconform >/dev/null || { echo ">> Erreur: kubeconform introuvable"; exit 1; }; \
+	if [ ! -f k8s/postgres/postgres.secret.sops.yaml ]; then \
+		echo ">> Erreur: k8s/postgres/postgres.secret.sops.yaml est introuvable"; exit 1; \
+	fi; \
+	if [ -z "$${EXPECTED_CONTEXT:-}" ] || [ -z "$${NAMESPACE:-}" ]; then \
+		echo ">> Erreur: EXPECTED_CONTEXT et NAMESPACE doivent être définis"; \
+		echo ">> Exemple: make secrets-dry-run EXPECTED_CONTEXT=minikube NAMESPACE=default"; exit 1; \
+	fi; \
+	CTX=$$(kubectl config current-context); \
+	if [ "$$CTX" != "$$EXPECTED_CONTEXT" ]; then \
+		echo ">> Erreur: Le contexte courant ($$CTX) ne correspond pas au contexte attendu ($$EXPECTED_CONTEXT)"; exit 1; \
+	fi; \
+	echo ">> Contexte cible: $$CTX (Namespace: $$NAMESPACE)"; \
+	echo ">> Vérification du déchiffrement et du format..."; \
+	sops -d k8s/postgres/postgres.secret.sops.yaml >/dev/null || { echo ">> Erreur de déchiffrement"; exit 1; }; \
+	sops -d k8s/postgres/postgres.secret.sops.yaml | kubeconform -strict -summary; \
+	echo ">> Dry-run server side..."; \
+	sops -d k8s/postgres/postgres.secret.sops.yaml | kubectl --context "$$CTX" --namespace "$$NAMESPACE" apply --dry-run=server -f -'
+
+secrets-apply: secrets-dry-run ## Déchiffre et applique le secret (requiert CONFIRM=APPLY_POSTGRES_SECRET)
+	@bash -c 'set -euo pipefail; \
+	if [ "$${CONFIRM:-}" != "APPLY_POSTGRES_SECRET" ]; then \
+		echo ">> Erreur: Confirmation requise. Ajoutez CONFIRM=APPLY_POSTGRES_SECRET"; exit 1; \
+	fi; \
+	CURRENT_CTX=$$(kubectl config current-context); \
+	if [ "$$CURRENT_CTX" != "$$EXPECTED_CONTEXT" ]; then \
+		echo ">> Erreur: Le contexte a changé depuis le dry-run ($$CURRENT_CTX != $$EXPECTED_CONTEXT)"; exit 1; \
+	fi; \
+	echo ">> Application réelle du secret..."; \
+	sops -d k8s/postgres/postgres.secret.sops.yaml | kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" apply -f -'
