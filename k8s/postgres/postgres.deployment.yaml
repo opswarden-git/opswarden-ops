@@ -7,6 +7,8 @@ metadata:
     app: postgres
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres
@@ -15,11 +17,43 @@ spec:
       labels:
         app: postgres
     spec:
+      serviceAccountName: postgres-sa
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
       containers:
         - name: postgres
           image: postgres:18-alpine
           ports:
             - containerPort: 5432
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - exec pg_isready -q -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - exec pg_isready -q -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           env:
             - name: POSTGRES_HOST_AUTH_METHOD
               value: "md5"

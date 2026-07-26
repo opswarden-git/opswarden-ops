@@ -32,10 +32,10 @@ API_HOST ?= api.opswarden.example
 # Manifests groupés par phase de déploiement.
 MONITORING := k8s/observability/cadvisor.daemonset.yaml
 DATA       := k8s/postgres/postgres.secret.yaml k8s/postgres/postgres.configmap.yaml \
-              k8s/postgres/postgres.volume.yaml k8s/postgres/postgres.deployment.yaml \
-              k8s/postgres/postgres.service.yaml \
-              k8s/redis/redis.configmap.yaml k8s/redis/redis.deployment.yaml \
-              k8s/redis/redis.service.yaml
+              k8s/postgres/postgres.volume.yaml k8s/postgres/postgres.sa.yaml \
+              k8s/postgres/postgres.deployment.yaml k8s/postgres/postgres.service.yaml \
+              k8s/redis/redis.configmap.yaml k8s/redis/redis.sa.yaml \
+              k8s/redis/redis.deployment.yaml k8s/redis/redis.service.yaml
 LB         := k8s/traefik/traefik.ingressclass.yaml k8s/traefik/traefik.rbac.yaml \
               k8s/traefik/traefik.deployment.yaml k8s/traefik/traefik.service.yaml
 # Couche app (placeholders) — décommenter au fil des images publiées :
