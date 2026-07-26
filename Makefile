@@ -31,7 +31,7 @@ API_HOST ?= api.opswarden.example
 
 # Manifests groupés par phase de déploiement.
 MONITORING := k8s/observability/cadvisor.daemonset.yaml
-DATA       := k8s/postgres/postgres.secret.yaml k8s/postgres/postgres.configmap.yaml \
+DATA       := k8s/postgres/postgres.configmap.yaml \
               k8s/postgres/postgres.volume.yaml k8s/postgres/postgres.sa.yaml \
               k8s/postgres/postgres.deployment.yaml k8s/postgres/postgres.service.yaml \
               k8s/redis/redis.configmap.yaml k8s/redis/redis.sa.yaml \
@@ -41,7 +41,7 @@ LB         := k8s/traefik/traefik.ingressclass.yaml k8s/traefik/traefik.rbac.yam
 # Couche app (placeholders) — décommenter au fil des images publiées :
 # APP      := k8s/server/ k8s/client-web/ k8s/investigation/ k8s/worker/
 READY_MANIFESTS := $(MONITORING) $(DATA) $(LB)
-K8S_MANIFESTS := $(shell find k8s -name '*.yaml' | sort)
+K8S_MANIFESTS := $(shell find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
 
 .DEFAULT_GOAL := help
 .PHONY: help all infra kubeconfig deploy db-check hosts smoke status destroy \
@@ -69,13 +69,30 @@ kubeconfig: ## (Re)génère ./kubeconfig depuis l'état Terraform
 	cd $(TF_DIR) && terraform apply -auto-approve -target=local_file.kubeconfig
 
 deploy: ## Applique la couche prête (observability + data + traefik), dans l'ordre
-	kubectl apply -f $(MONITORING)
-	kubectl apply $(addprefix -f ,$(DATA))
+	@bash -c 'set -euo pipefail; \
+	if [ -z "$${EXPECTED_CONTEXT:-}" ] || [ -z "$${NAMESPACE:-}" ]; then \
+		echo ">> Erreur: EXPECTED_CONTEXT et NAMESPACE doivent être définis (ex: EXPECTED_CONTEXT=minikube NAMESPACE=default)"; \
+		exit 1; \
+	fi; \
+	CTX=$$(kubectl config current-context); \
+	if [ "$$CTX" != "$$EXPECTED_CONTEXT" ]; then \
+		echo ">> Erreur: Le contexte courant ($$CTX) ne correspond pas au contexte attendu ($$EXPECTED_CONTEXT)"; \
+		exit 1; \
+	fi; \
+	if ! kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" get secret postgres-secret >/dev/null 2>&1; then \
+		echo ">> ERREUR: Le secret postgres-secret est introuvable sur le cluster."; \
+		echo ">> Veuillez appliquer le secret SOPS avant de déployer :"; \
+		echo ">>   make secrets-dry-run EXPECTED_CONTEXT=$$EXPECTED_CONTEXT NAMESPACE=$$NAMESPACE"; \
+		echo ">>   make secrets-apply EXPECTED_CONTEXT=$$EXPECTED_CONTEXT NAMESPACE=$$NAMESPACE CONFIRM=APPLY_POSTGRES_SECRET"; \
+		exit 1; \
+	fi'
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply -f $(MONITORING)
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply $(addprefix -f ,$(DATA))
 	@echo ">> Attente de postgres & redis..."
-	kubectl rollout status deploy/postgres --timeout=180s
-	kubectl rollout status deploy/redis --timeout=120s
-	kubectl apply $(addprefix -f ,$(LB))
-	kubectl -n kube-public rollout status deploy/traefik --timeout=120s
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" rollout status deploy/postgres --timeout=180s
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" rollout status deploy/redis --timeout=120s
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public apply $(addprefix -f ,$(LB))
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public rollout status deploy/traefik --timeout=120s
 	@echo ">> Couche app (server/client-web/investigation/worker) : placeholders, non déployée."
 
 db-check: ## Vérifie la connectivité Postgres (le schéma est géré par opswarden-server)
@@ -186,14 +203,23 @@ minikube-down: ## Supprime le cluster minikube local
 check-plaintext-secret-manifests: ## Vérifie la présence de manifestes de secrets en clair (pas un scanner global)
 	@echo ">> Vérification des manifestes de secrets en clair..."
 	@if git ls-files | grep -E '\.secret\.yaml$$' | grep -v '\.sops\.'; then \
-		if [ "$$(git ls-files | grep -E '\.secret\.yaml$$' | grep -v '\.sops\.' | grep -c 'k8s/postgres/postgres.secret.yaml')" -eq 1 ]; then \
-			echo ">> ATTENTION : k8s/postgres/postgres.secret.yaml est toujours toléré pendant l'Étape 2A."; \
-		else \
-			echo ">> ERREUR : Des secrets en clair non autorisés sont suivis par Git."; \
-			exit 1; \
-		fi \
+		echo ">> ERREUR : Des secrets en clair non autorisés sont suivis par Git."; \
+		exit 1; \
 	fi
-	@echo ">> Les règles SOPS seront validées sur les fichiers *.sops.yaml."
+	@if [ -f .sops.yaml ] && grep -q 'AGE-SECRET-KEY' .sops.yaml; then \
+		echo ">> ERREUR : .sops.yaml contient une clé privée age"; \
+		exit 1; \
+	fi
+	@echo ">> Contrôle structurel des fichiers SOPS..."
+	@for f in $$(git ls-files | grep -E '\.secret\.sops\.yaml$$' || true); do \
+		if [ -z "$$f" ]; then continue; fi; \
+		if [ ! -s "$$f" ]; then echo ">> ERREUR: $$f est vide"; exit 1; fi; \
+		if ! grep -q '^sops:' "$$f"; then echo ">> ERREUR: $$f ne contient pas la section sops:"; exit 1; fi; \
+		if ! grep -q 'ENC\[AES256_GCM' "$$f"; then echo ">> ERREUR: $$f ne semble pas chiffré (ENC[AES256_GCM introuvable)"; exit 1; fi; \
+		if grep -q 'AGE-SECRET-KEY' "$$f"; then echo ">> ERREUR: $$f contient une clé privée age en clair (AGE-SECRET-KEY)"; exit 1; fi; \
+	done
+	@echo ">> Les manifests SOPS chiffrés sont exclus de kubeconform."
+	@echo ">> Utilisez make secrets-dry-run pour valider leur contenu déchiffré."
 
 secrets-dry-run: ## Déchiffre et valide le secret sur le cluster sans l'appliquer (bash requis)
 	@bash -c 'set -euo pipefail; \

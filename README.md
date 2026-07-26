@@ -169,16 +169,39 @@ cd ..
 export KUBECONFIG=$(pwd)/kubeconfig
 ```
 
-### 3 — Deploy the infrastructure layer
+### 3 — Bootstrap Secrets (SOPS)
+
+> Credentials are encrypted in Git via [SOPS](https://github.com/getsops/sops) and `age`. They must be applied manually before the database deployment.
 
 ```bash
-kubectl apply -f k8s/observability/cadvisor.daemonset.yaml
-kubectl apply -f k8s/postgres/
-kubectl apply -f k8s/redis/
-kubectl apply -f k8s/traefik/
+# 1. Provide your private age key to SOPS
+export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
+
+# 2. Select your target environment explicitly
+export EXPECTED_CONTEXT=minikube
+export NAMESPACE=default
+
+# 3. Validate the decrypted secret against the target cluster
+make secrets-dry-run \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
+  NAMESPACE="$NAMESPACE"
+
+# 4. Apply the decrypted secret to the cluster
+make secrets-apply \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
+  NAMESPACE="$NAMESPACE" \
+  CONFIRM=APPLY_POSTGRES_SECRET
 ```
 
-### 4 — Deploy the application layer
+### 4 — Deploy the infrastructure layer
+
+```bash
+make deploy \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
+  NAMESPACE="$NAMESPACE"
+```
+
+### 5 — Deploy the application layer
 
 > The OpsWarden app services (`server`, `client-web`, `investigation`, `worker`)
 > are **placeholders** for now. Once their images are published, fill the
