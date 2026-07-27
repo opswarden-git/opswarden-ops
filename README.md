@@ -42,12 +42,13 @@ It is **separate from the product** (`opswarden-app`) and **deliberately optiona
 OpsWarden runs with a single `docker compose up`. This repo is the **portfolio
 cloud showcase** — it must never be a prerequisite to run the product.
 
-> Status: this repo is derived from a **proven reference deployment** (a working
-> DOKS + Traefik + Postgres/Redis stack). The reusable infrastructure manifests
-> are in place — their images modernized (Postgres 18 / Redis 8 / Traefik v3),
-> pending re-validation on a live cluster — while the OpsWarden application
-> services are **placeholders** until their images are published. Full re-targeting
-> once the core + AI SRE are deployable. See the per-service status below.
+> Status: the complete core stack—Traefik, PostgreSQL, Redis, Rust server and
+> Next.js client—has passed local two-node deployment and end-to-end product
+> checks. The DOKS production path, immutable GHCR releases, public DNS and TLS
+> issuance remain pending. The optional AI SRE and worker services are not part
+> of the core product deployment.
+> See the current [deployment audit](docs/deployment-audit.md) for the verified
+> state, production blockers and rollout order.
 
 ---
 
@@ -57,11 +58,9 @@ cloud showcase** — it must never be a prerequisite to run the product.
 opswarden-ops/
 │
 ├── k8s/
-│   ├── server/             # OpsWarden server (Rust/Axum) + HPA/PDB tmpl — placeholder
-│   ├── client-web/         # Next.js client (or Vercel)    — placeholder
-│   ├── investigation/      # AI SRE agent (RAG/FastAPI)     — placeholder
-│   ├── worker/             # async Redis workers           — placeholder
-│   ├── postgres/           # PostgreSQL                     — ready
+│   ├── server/             # OpsWarden server (Rust/Axum) + HPA/PDB — manifest ready
+│   ├── client-web/         # Next.js client + ingress      — manifest ready
+│   ├── postgres/           # PostgreSQL + encrypted off-cluster backups
 │   ├── redis/              # Redis                          — ready
 │   ├── traefik/            # ingress controller & LB (+ IngressClass, PDB) — ready
 │   └── observability/      # cAdvisor (+ prom/grafana/loki) — partial
@@ -79,20 +78,18 @@ opswarden-ops/
 
 ## Services
 
-| Service           |                                          Tech                                          | Status                                      |
-| ----------------- | :------------------------------------------------------------------------------------: | ------------------------------------------- |
-| **server**        |       <img src="https://skillicons.dev/icons?i=rust" height="22" /> Rust / Axum        | placeholder — `k8s/server/`                 |
-| **client-web**    |        <img src="https://skillicons.dev/icons?i=nextjs" height="22" /> Next.js         | placeholder — `k8s/client-web/` (or Vercel) |
-| **investigation** |    <img src="https://skillicons.dev/icons?i=python" height="22" /> FastAPI (AI SRE)    | placeholder — `k8s/investigation/`          |
-| **worker**        |                                         async                                          | placeholder — `k8s/worker/`                 |
-| **PostgreSQL**    | <img src="https://skillicons.dev/icons?i=postgres" height="22" /> `postgres:18-alpine` | ready — `k8s/postgres/`                     |
-| **Redis**         |    <img src="https://skillicons.dev/icons?i=redis" height="22" /> `redis:8-alpine`     | ready — `k8s/redis/`                        |
-| **Traefik**       |                                     `traefik:v3.7`                                     | ready — `k8s/traefik/`                      |
-| **cAdvisor**      |     <img src="https://skillicons.dev/icons?i=prometheus" height="22" /> monitoring     | ready — `k8s/observability/`                |
+| Service        |                                      Tech                                       | Status                                 |
+| -------------- | :-----------------------------------------------------------------------------: | -------------------------------------- |
+| **server**     |    <img src="https://skillicons.dev/icons?i=rust" height="22" /> Rust / Axum    | locally verified — release pending     |
+| **client-web** |     <img src="https://skillicons.dev/icons?i=nextjs" height="22" /> Next.js     | locally verified — release/TLS pending |
+| **PostgreSQL** | <img src="https://skillicons.dev/icons?i=postgres" height="22" /> PostgreSQL 18 | locally verified — backup automation   |
+| **Redis**      |     <img src="https://skillicons.dev/icons?i=redis" height="22" /> Redis 8      | ready — immutable image                |
+| **Traefik**    |                                   Traefik 3.7                                   | ready — immutable image                |
+| **cAdvisor**   | <img src="https://skillicons.dev/icons?i=prometheus" height="22" /> monitoring  | ready — `k8s/observability/`           |
 
-Replicated services use **pod anti-affinity** to land on different nodes.
-Shared config lives in **ConfigMaps**; credentials in **Secrets** (rotate the
-placeholder values before any real deployment).
+Replicated services use **preferred pod anti-affinity** to spread across nodes.
+Shared config lives in **ConfigMaps**; credentials are supplied through
+SOPS-encrypted **Secrets** before a real deployment.
 
 ---
 
@@ -138,7 +135,8 @@ screenshots will replace the application-level ones once it is deployed.
 ## Installation & Configuration
 
 > **One-command path.** The whole lifecycle is automated by the
-> [`Makefile`](Makefile): `make all` (provision + deploy the ready layer),
+> [`Makefile`](Makefile): `make all` (initialize remote state, provision and
+> deploy the ready layer),
 > `make hosts && make smoke` (local DNS + end-to-end check), `make harden`
 > (PDB/HPA), `make destroy`. Run `make help` for every target. **No cloud
 > account?** Run the same manifests for free on a local 2-node minikube:
@@ -149,25 +147,31 @@ screenshots will replace the application-level ones once it is deployed.
 
 - [Nix](https://nixos.org/download.html) package manager
 - A [DigitalOcean](https://www.digitalocean.com/) account with an API token
+- A versioned DigitalOcean Spaces bucket and restricted access keys for Terraform state
 - [Git](https://git-scm.com/)
 
 ### 1 — Clone & enter the environment
 
 ```bash
 git clone git@github.com:opswarden-git/opswarden-ops.git && cd opswarden-ops
-cp .env.example .env   # add your DigitalOcean API token
+cp .env.example .env   # add credentials and a reviewed TF_VAR_kubernetes_version
 nix develop            # loads kubectl, terraform, k9s, helm…
 ```
 
-### 2 — Provision the cluster
+### 2 — Initialize remote state and provision the cluster
 
 ```bash
-cd terraform
-terraform init
-terraform apply        # creates a 2-worker DOKS cluster (~5 min)
-cd ..
+cp terraform/backend.hcl.example terraform/backend.hcl
+# Edit the local, git-ignored backend.hcl with the bucket and Spaces region.
+# AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are loaded from .env.
+make infra TF_BACKEND_CONFIG=terraform/backend.hcl
 export KUBECONFIG=$(pwd)/kubeconfig
 ```
+
+The backend uses the Spaces S3-compatible API and native Terraform lockfiles.
+Enable bucket versioning before the first apply. If a local state already exists,
+`make backend-init` stops and prints the explicit migration command instead of
+silently discarding it.
 
 ### 3 — Bootstrap Secrets (SOPS)
 
@@ -179,7 +183,7 @@ export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
 
 # 2. Select your target environment explicitly
 export EXPECTED_CONTEXT=minikube
-export NAMESPACE=default
+export NAMESPACE=opswarden
 
 # 3. Validate the decrypted secret against the target cluster
 make secrets-dry-run \
@@ -201,23 +205,84 @@ make deploy \
   NAMESPACE="$NAMESPACE"
 ```
 
-### 5 — Deploy the application layer
+### 5 — Deploy the nominal application backend
 
-> The OpsWarden app services (`server`, `client-web`, `investigation`, `worker`)
-> are **placeholders** for now. Once their images are published, fill the
-> manifests in `k8s/<service>/` and apply them:
+The nominal production split is intentional: `client-web` runs on Vercel at
+`app.opswarden.dev`; Rust, PostgreSQL, Redis and Traefik run on DOKS. Create the
+SOPS-managed `opswarden-server-secret` first. Production accepts only an
+immutable server digest and HTTPS origins.
 
 ```bash
-# kubectl apply -f k8s/server/
-# kubectl apply -f k8s/client-web/
-# kubectl apply -f k8s/investigation/
-# kubectl apply -f k8s/worker/
+make deploy-server \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
+  NAMESPACE="$NAMESPACE" \
+  SERVER_IMAGE="ghcr.io/opswarden-git/opswarden-server@sha256:<digest>" \
+  PUBLIC_ORIGIN="https://app.opswarden.dev" \
+  API_ORIGIN="https://api.opswarden.dev"
 ```
+
+Configure the Vercel project with Root Directory `client-web`,
+`OPSWARDEN_API_ORIGIN=https://api.opswarden.dev`, and
+`NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws`. The checked-in Kubernetes web
+Deployment is an optional self-hosted path exposed through
+`make deploy-self-hosted-web`; it is not part of production CD.
+
+### 6 — Enable public TLS
+
+After the load balancer address is known and `api.opswarden.dev` points at it:
+
+```bash
+make tls \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
+  NAMESPACE="$NAMESPACE" \
+  ACME_EMAIL="ops@example.com" \
+  CONFIRM=ENABLE_PUBLIC_TLS
+```
+
+### 7 — Enable encrypted off-cluster backups
+
+Create and SOPS-encrypt `k8s/postgres/postgres-backup.secret.sops.yaml` from the
+example. Its rclone crypt password must be independent from database credentials.
+
+```bash
+make secret-apply \
+  SECRET_FILE=k8s/postgres/postgres-backup.secret.sops.yaml \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE" \
+  CONFIRM=APPLY_SOPS_SECRET
+
+make backup-enable \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE" \
+  BACKUP_BUCKET="opswarden-backups" \
+  BACKUP_ENDPOINT="https://fra1.digitaloceanspaces.com" \
+  CONFIRM=ENABLE_BACKUPS
+
+# Prove upload, decryption and an isolated PostgreSQL restore.
+make backup-run EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE"
+make backup-verify \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE" \
+  CONFIRM=VERIFY_LATEST_BACKUP
+```
+
+### 8 — Configure guarded production delivery
+
+Create a GitHub environment named `production`, enable required reviewers and
+define:
+
+- secret `KUBE_CONFIG_B64`: base64-encoded, least-privilege production kubeconfig;
+- variable `KUBE_CONTEXT`: the exact context name in that kubeconfig;
+- variable `KUBE_NAMESPACE`: the application namespace;
+- variable `FRONTEND_ORIGIN`: `https://app.opswarden.dev`;
+- variable `API_ORIGIN`: `https://api.opswarden.dev`.
+
+Run **Deploy production** from `main` with the server GHCR digest and the literal
+confirmation `DEPLOY_PRODUCTION`. If backups are enabled, the workflow takes one
+before rollout. A failed rollout or API/WebSocket smoke restores the prior
+server image. Vercel has its own deployment and rollback history.
 
 ### Teardown
 
 ```bash
-cd terraform && terraform destroy   # or: make destroy
+make destroy TF_BACKEND_CONFIG=terraform/backend.hcl
 ```
 
 ---
@@ -228,24 +293,23 @@ Reusable patterns ported from the reference deployment, applied with `make harde
 
 - **Disruption budgets** — [`k8s/traefik/traefik.pdb.yaml`](k8s/traefik/traefik.pdb.yaml)
   keeps ≥1 Traefik replica during node drain; [`k8s/server/server.pdb.yaml`](k8s/server/server.pdb.yaml)
-  is the template for the API server.
+  protects the API server.
 - **Autoscaling** — [`k8s/server/server.hpa.yaml`](k8s/server/server.hpa.yaml)
-  (CPU-based HPA template), enabled by `requests.cpu` + metrics-server
+  is a CPU-based HPA enabled by `requests.cpu` + metrics-server
   (`make metrics` / `make load`).
 - **Modern ingress** — [`k8s/traefik/traefik.ingressclass.yaml`](k8s/traefik/traefik.ingressclass.yaml)
   replaces the deprecated `kubernetes.io/ingress.class` annotation; app Ingresses
   use `spec.ingressClassName: traefik`.
-- **Strict HA** — replicated services use _required_ pod anti-affinity (one
-  replica per node). On clusters where `nodes < replicas`,
-  [`scripts/soft-affinity.sh`](scripts/soft-affinity.sh) (`make soft-affinity`)
-  relaxes it to _preferred_ without editing the manifests.
+- **Availability-aware placement** — replicated services default to preferred
+  cross-node anti-affinity so a rolling update is not deadlocked on a two-node
+  cluster. [`scripts/soft-affinity.sh`](scripts/soft-affinity.sh) can enforce
+  strict one-replica-per-node placement where spare node capacity exists.
 - **Smoke & load** — [`scripts/smoke.sh`](scripts/smoke.sh) checks the public
   path (Traefik + app routes, NixOS/minikube aware) and
   [`scripts/load.sh`](scripts/load.sh) drives autoscaling.
 
-> HPA/PDB for the app tier (`server`, `client-web`) are **templates** until those
-> images are deployed — `make harden` applies what is ready (Traefik) and skips
-> the rest with a notice.
+The guarded production workflow applies the server HPA/PDB, verifies the public
+API and WebSocket paths, and rolls the server image back on failure.
 
 ---
 
