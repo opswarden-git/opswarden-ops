@@ -1,9 +1,0 @@
-# OpsWarden -- worker (asynchrone, consomme Redis) -- PLACEHOLDER.
-#
-# Workers asynchrones (nice-to-have) : consomment une file Redis pour les taches
-# longues (ingestion de logs, embeddings, notifications). Pas d'entree HTTP, donc
-# pas de Service.
-#
-# A remplir si/quand la file Redis + workers est introduite :
-#   - deployment.yaml : image opswarden-worker, acces Redis (k8s/redis/) et
-#                       Postgres (k8s/postgres/)
