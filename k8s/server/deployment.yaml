@@ -44,7 +44,7 @@ spec:
               key: GOOGLE_OAUTH_CLIENT_SECRET
               name: server-secret
         - name: GOOGLE_OAUTH_REDIRECT_URI
-          value: https://api.opswarden.dev/api/auth/google/callback
+          value: https://app.opswarden.dev/api/auth/google/callback
         envFrom:
         - configMapRef:
             name: server-config
