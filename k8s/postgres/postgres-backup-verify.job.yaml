@@ -1,0 +1,138 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: postgres-backup-verify-
+  labels:
+    app: postgres-backup-verify
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 7500
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        app: postgres-backup-verify
+    spec:
+      serviceAccountName: postgres-backup-sa
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        fsGroup: 20000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: download
+          image: rclone/rclone@sha256:c61954aaa32328a5486715dd063a81c7879f5195ad3505cd362deddd509dc4a1
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              trap 'status=$?; if [ "$status" -ne 0 ]; then touch /verify/failed; fi' EXIT
+              export RCLONE_CONFIG_BACKUP_REMOTE="s3:${BACKUP_BUCKET}/${BACKUP_PREFIX}"
+              latest=$(rclone lsf backup: --dirs-only | sed 's:/$::' | sort | tail -n 1)
+              [ -n "$latest" ] || { echo "no remote backup found" >&2; exit 1; }
+              mkdir -p /verify/latest
+              rclone copy "backup:${latest}" /verify/latest
+              touch /verify/ready
+          envFrom:
+            - secretRef:
+                name: postgres-backup-secret
+            - configMapRef:
+                name: postgres-backup-config
+          env:
+            - name: RCLONE_CONFIG_S3_TYPE
+              value: s3
+            - name: RCLONE_CONFIG_S3_PROVIDER
+              value: Other
+            - name: RCLONE_CONFIG_S3_ACL
+              value: private
+            - name: RCLONE_CONFIG_BACKUP_TYPE
+              value: crypt
+            - name: RCLONE_CONFIG_BACKUP_FILENAME_ENCRYPTION
+              value: standard
+            - name: RCLONE_CONFIG_BACKUP_DIRECTORY_NAME_ENCRYPTION
+              value: "true"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: verify
+              mountPath: /verify
+            - name: rclone-cache
+              mountPath: /.cache
+            - name: tmp
+              mountPath: /tmp
+        - name: restore
+          image: postgres@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              for _ in $(seq 1 720); do
+                if [ -f /verify/failed ]; then
+                  echo "backup download failed" >&2
+                  exit 1
+                fi
+                [ -f /verify/ready ] && break
+                sleep 10
+              done
+              [ -f /verify/ready ] || { echo "backup download timed out" >&2; exit 1; }
+              cd /verify/latest
+              sha256sum -c SHA256SUMS
+              gzip -t cluster.sql.gz
+              export PGDATA=/verify/database
+              initdb --username=restore_admin --auth=trust
+              pg_ctl -o "-c listen_addresses='' -k /tmp" -w start
+              trap 'pg_ctl -m fast -w stop' EXIT
+              gzip -dc cluster.sql.gz | psql -h /tmp -U restore_admin -d postgres -v ON_ERROR_STOP=1
+              psql -h /tmp -U restore_admin -d "$BACKUP_EXPECTED_DATABASE" -v ON_ERROR_STOP=1 -Atqc \
+                "SELECT to_regclass('public.users') IS NOT NULL" | grep -qx t
+              psql -h /tmp -U restore_admin -d "$BACKUP_EXPECTED_DATABASE" -v ON_ERROR_STOP=1 -Atqc \
+                'SELECT count(*) FROM _sqlx_migrations WHERE success' | grep -Eq '^[1-9][0-9]*$'
+              echo "backup restored successfully into isolated PostgreSQL"
+          envFrom:
+            - configMapRef:
+                name: postgres-backup-config
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: verify
+              mountPath: /verify
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: verify
+          emptyDir:
+            sizeLimit: 20Gi
+        - name: rclone-cache
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
