@@ -5,6 +5,8 @@
 .terraform/
 terraform.tfstate
 terraform.tfstate.backup
+terraform/backend.hcl
+terraform/*.tfplan
 
 # Fichiers de configuration Kubernetes locaux générés
 kubeconfig
