@@ -18,13 +18,11 @@ kubeconfig
 
 # Backups and database artifacts
 *.dump
-*.sql
 *.tar
 *.tar.gz
 *.tgz
 *.backup
 *.bak
-*.age
 PG_VERSION
 pg_control
 
