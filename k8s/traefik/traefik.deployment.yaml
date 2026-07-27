@@ -47,6 +47,8 @@ spec:
             - --metrics.prometheus=true
             - --metrics.prometheus.addEntryPointsLabels=true
             - --metrics.prometheus.addServicesLabels=true
+            - --api.insecure=true
+            - --api.dashboard=true
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
@@ -58,6 +60,8 @@ spec:
               containerPort: 80
             - name: websecure
               containerPort: 443
+            - name: dashboard
+              containerPort: 8080
           readinessProbe:
             httpGet:
               path: /ping
