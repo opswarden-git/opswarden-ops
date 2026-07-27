@@ -70,7 +70,7 @@ K8S_MANIFESTS := $(shell find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
         backup-enable backup-run backup-verify backup-status \
         cert-manager-install tls tls-staging tls-status \
         metrics hpa pdb load harden soft-affinity hard-affinity \
-        minikube minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
+        minikube minikube-host-preflight minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
 
 help: ## Affiche cette aide
 	@echo "OpsWarden Ops — cibles make :"
@@ -465,7 +465,20 @@ harden: pdb hpa ## Applique PDB + HPA (ce qui est prêt)
 minikube: minikube-up minikube-deploy ## One-shot : cluster local + couche prête
 	@echo ">> Fait. Ensuite : 'make minikube-smoke' pour vérifier."
 
-minikube-up: ## Démarre minikube (driver docker) + metrics-server + storage
+minikube-host-preflight: ## Vérifie les sysctls ARP requis par Calico avec le driver Docker
+	@bash -c 'set -euo pipefail; \
+	for key in net.ipv4.conf.all.arp_ignore net.ipv4.conf.default.arp_ignore \
+		net.ipv4.conf.all.arp_filter net.ipv4.conf.default.arp_filter; do \
+		value=$$(sysctl -n "$$key"); \
+		if [ "$$value" != "0" ]; then \
+			echo ">> Erreur: $$key=$$value; Calico requiert 0 avec le driver Docker."; \
+			echo ">> NixOS: définir boot.kernel.sysctl pour les quatre clés ARP à 0, reconstruire, puis relancer."; \
+			exit 1; \
+		fi; \
+	done; \
+	echo ">> Préflight ARP hôte compatible avec Calico: OK"'
+
+minikube-up: minikube-host-preflight ## Démarre minikube (driver docker) + metrics-server + storage
 	minikube start --nodes $(MINIKUBE_NODES) --driver=docker --cni=$(MINIKUBE_CNI) \
 		--container-runtime=$(MINIKUBE_CONTAINER_RUNTIME) \
 		--addons=metrics-server,default-storageclass,storage-provisioner
