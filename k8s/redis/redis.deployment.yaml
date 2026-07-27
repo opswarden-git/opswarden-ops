@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
-  namespace: default
   labels:
     app: redis
 spec:
@@ -19,7 +18,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: redis
-          image: redis:8-alpine
+          image: redis@sha256:8096655e437712b07503796fb64d81359256cfcff0ab29d95a7da72863786efb
           ports:
             - containerPort: 6379
           readinessProbe:
