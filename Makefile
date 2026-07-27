@@ -54,6 +54,9 @@ SELF_HOSTED_WEB_SUPPORT := k8s/client-web/client-web.sa.yaml \
                            k8s/client-web/client-web.ingress.yaml
 BACKUP_SUPPORT := k8s/postgres/postgres-backup.sa.yaml \
                   k8s/postgres/postgres-backup.cronjob.yaml
+DEFAULT_NETWORK_POLICIES := k8s/network-policies/default-deny.yaml \
+                            k8s/network-policies/workloads.yaml
+TRAEFIK_NETWORK_POLICY := k8s/network-policies/traefik.yaml
 READY_MANIFESTS := $(DATA) $(LB)
 K8S_MANIFESTS := $(shell find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
 
@@ -132,6 +135,10 @@ deploy: ## Applique la couche prête (data + traefik), dans l'ordre
 		| kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public apply -f -
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public apply $(addprefix -f ,$(LB))
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply -f $(TRAEFIK_APP_RBAC)
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply \
+		$(addprefix -f ,$(DEFAULT_NETWORK_POLICIES))
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public apply \
+		-f $(TRAEFIK_NETWORK_POLICY)
 	@if [ "$${LOCAL_PRIMARY_ONLY:-0}" = "1" ]; then \
 		TRAEFIK_PATCH='{"spec":{"replicas":1,"template":{"spec":{"nodeSelector":{"minikube.k8s.io/primary":"true"},"hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}}}'; \
 		kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public patch deploy/traefik --type=merge -p "$$TRAEFIK_PATCH"; \
