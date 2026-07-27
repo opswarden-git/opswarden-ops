@@ -29,6 +29,9 @@
             nodejs_22
             sops
             age
+            gettext
+            actionlint
+            yq-go
           ];
 
           shellHook = ''
@@ -103,9 +106,10 @@ EOF
             
             echo ""
             echo -e "\033[1;35mQUICK START:\033[0m"
-            echo -e "  1. Set your token in the .env file."
-            echo -e "  2. Provision DOKS: cd terraform && tf init && tf apply"
-            echo -e "  3. Deploy stack:   k apply -f <manifest>.yaml"
+            echo -e "  1. Set DigitalOcean and Spaces credentials in .env."
+            echo -e "  2. Configure terraform/backend.hcl from the example."
+            echo -e "  3. Provision DOKS: make infra TF_BACKEND_CONFIG=terraform/backend.hcl"
+            echo -e "  4. Deploy stack:   make deploy EXPECTED_CONTEXT=<context> NAMESPACE=<namespace>"
             echo ""
           '';
         };
