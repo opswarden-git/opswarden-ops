@@ -1,15 +1,10 @@
 #!/usr/bin/env sh
-# Bascule l'anti-affinity des pods entre dure (required, défaut des manifests) et
-# souple (preferred) sur les déploiements répliqués — SANS éditer les manifests.
+# Bascule l'anti-affinity des pods entre souple (preferred, défaut des manifests)
+# et dure (required) sur les déploiements répliqués — sans éditer les manifests.
 #
-# Pourquoi : la base utilise une anti-affinity *required* (vraie HA : un replica
-# par nœud). Cela suppose un node pool avec de la marge (nodes > replicas). Sur un
-# petit cluster (<=2 nœuds, minikube), "required" laisse les pods en trop en
-# Pending et bloque le surge en rolling-update / le scale-up HPA. Lancer ceci
-# pour relâcher le temps d'une démo.
-#
-# Les déploiements applicatifs (server/client-web) sont des placeholders : ils
-# sont sautés tant qu'ils n'existent pas. Seul traefik est patché aujourd'hui.
+# Le mode required garantit un replica par nœud mais exige de la capacité libre
+# pendant les rolling updates et le scale-up HPA. Le mode preferred conserve la
+# disponibilité si le cluster manque temporairement de nœuds.
 #
 # Usage :
 #   ./soft-affinity.sh on    # required -> preferred (petits clusters / local)
@@ -21,7 +16,8 @@ MODE="${1:-}"
   echo "usage: $0 on|off" >&2; exit 2; }
 
 # app:namespace — déploiements répliqués avec anti-affinity.
-TARGETS="server:default client-web:default traefik:kube-public"
+APP_NAMESPACE=${NAMESPACE:-default}
+TARGETS="server:${APP_NAMESPACE} client-web:${APP_NAMESPACE} traefik:kube-public"
 
 patch_for() {
   app="$1"
@@ -47,7 +43,7 @@ EOF
 for t in $TARGETS; do
   app="${t%%:*}"; ns="${t##*:}"
   if ! kubectl -n "$ns" get deployment "$app" >/dev/null 2>&1; then
-    echo ">> skip deploy/$app (ns $ns) — absent (placeholder)"
+    echo ">> skip deploy/$app (ns $ns) — absent"
     continue
   fi
   echo ">> $MODE anti-affinity: deploy/$app (ns $ns)"

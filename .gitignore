@@ -5,6 +5,24 @@
 .terraform/
 terraform.tfstate
 terraform.tfstate.backup
+terraform/backend.hcl
+terraform/*.tfplan
 
 # Fichiers de configuration Kubernetes locaux générés
 kubeconfig
+
+# Protection des secrets en clair
+*.secret.yaml
+!*.secret.example.yaml
+!*.secret.sops.yaml
+
+# Backups and database artifacts
+*.dump
+*.tar
+*.tar.gz
+*.tgz
+*.backup
+*.bak
+PG_VERSION
+pg_control
+

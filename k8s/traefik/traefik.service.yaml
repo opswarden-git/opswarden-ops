@@ -6,7 +6,9 @@ metadata:
   labels:
     app: traefik
 spec:
-  type: NodePort
+  # DOKS provisions the public DigitalOcean load balancer. The fixed nodePort is
+  # retained so the same manifest remains reachable in the local minikube lab.
+  type: LoadBalancer
   selector:
     app: traefik
   ports:
@@ -14,3 +16,7 @@ spec:
       port: 80
       targetPort: 80
       nodePort: 30021
+    - name: websecure
+      port: 443
+      targetPort: 443
+      nodePort: 30443

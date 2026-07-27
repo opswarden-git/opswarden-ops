@@ -1,0 +1,18 @@
+# Copy to terraform/backend.hcl (git-ignored), then replace the bucket and
+# endpoint region. Enable bucket versioning in the DigitalOcean control panel.
+bucket = "opswarden-terraform-state"
+key    = "production/doks.tfstate"
+region = "us-east-1"
+
+endpoints = {
+  s3 = "https://fra1.digitaloceanspaces.com"
+}
+
+use_lockfile = true
+
+# Spaces is S3-compatible but is not an AWS account.
+skip_credentials_validation = true
+skip_region_validation      = true
+skip_requesting_account_id  = true
+skip_metadata_api_check     = true
+skip_s3_checksum            = true

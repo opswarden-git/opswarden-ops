@@ -2,9 +2,9 @@
 # OpsWarden Ops — smoke test bout-en-bout / infra.
 # Prouve le chemin public (Traefik) et dumpe l'état du cluster.
 #
-# La couche prête (Traefik + cluster) est toujours vérifiée. Les routes
-# applicatives (web / api) sont best-effort : elles restent "skip" tant que les
-# images OpsWarden ne sont pas déployées (server/client-web sont des placeholders).
+# Vérifie Traefik, le rendu Next.js, le proxy Next -> Rust et le handshake
+# WebSocket same-origin. Le test est strict : une route absente fait échouer la
+# commande au lieu de masquer un déploiement incomplet.
 #
 # Par défaut : s'appuie sur /etc/hosts mappant les hôtes vers une IP de nœud.
 # Sans /etc/hosts (NixOS / minikube), résoudre via curl à la place :
@@ -12,43 +12,71 @@
 set -euo pipefail
 
 PORT="${PORT:-30021}"
-DASH_PORT="${DASH_PORT:-30042}"
-WEB_HOST="${WEB_HOST:-app.opswarden.example}"
-API_HOST="${API_HOST:-api.opswarden.example}"
-WEB_URL="${WEB_URL:-http://$WEB_HOST:$PORT}"
-API_URL="${API_URL:-http://$API_HOST:$PORT}"
+WEB_HOST="${WEB_HOST:-app.opswarden.dev}"
+WEB_URL="${WEB_URL:-http://$WEB_HOST:$PORT/en}"
+ABOUT_URL="${ABOUT_URL:-http://$WEB_HOST:$PORT/about.json}"
+WS_URL="${WS_URL:-http://$WEB_HOST:$PORT/ws}"
 
 # Avec RESOLVE_IP, on envoie le bon Host header mais on résout vers l'IP du nœud
 # (pas besoin de /etc/hosts). Pointe aussi le dashboard Traefik sur cette IP.
 RESOLVE=()
 if [ -n "${RESOLVE_IP:-}" ]; then
-  RESOLVE=(--resolve "$WEB_HOST:$PORT:$RESOLVE_IP" --resolve "$API_HOST:$PORT:$RESOLVE_IP")
-  TRAEFIK_PING="${TRAEFIK_PING:-http://$RESOLVE_IP:$DASH_PORT/ping}"
+  RESOLVE=(--resolve "$WEB_HOST:$PORT:$RESOLVE_IP")
+  TRAEFIK_PING="${TRAEFIK_PING:-http://$RESOLVE_IP:$PORT/ping}"
 else
-  TRAEFIK_PING="${TRAEFIK_PING:-http://localhost:$DASH_PORT/ping}"
+  TRAEFIK_PING="${TRAEFIK_PING:-http://$WEB_HOST:$PORT/ping}"
 fi
 
 pass() { printf '  \033[0;32m✓\033[0m %s\n' "$1"; }
-skip() { printf '  \033[0;33m•\033[0m %s\n' "$1"; }
 
-echo "== Couche prête (Traefik) =="
-code=$(curl -fsS -o /dev/null -w '%{http_code}' "$TRAEFIK_PING") \
-  && pass "traefik /ping -> HTTP $code" \
-  || echo "  (traefik /ping injoignable d'ici — ok si pas de port-forward)"
+if [ "${API_ONLY:-0}" != "1" ]; then
+  echo "== Couche prête (Traefik) =="
+  code=$(curl -fsS -o /dev/null -w '%{http_code}' "$TRAEFIK_PING")
+  pass "traefik /ping -> HTTP $code"
+fi
 
-echo "== Routes applicatives (best-effort tant que non déployées) =="
-check_app() {
-  name="$1"; url="$2"; folder="$3"
-  code=$(curl -fsS "${RESOLVE[@]}" -o /dev/null -w '%{http_code}' "$url" 2>/dev/null) \
-    && pass "$name ($url) -> HTTP $code" \
-    || skip "$name ($url) pas encore servi — déployer $folder pour l'allumer"
-}
-check_app web "$WEB_URL" "k8s/client-web/"
-check_app api "$API_URL" "k8s/server/"
+echo "== Routes applicatives =="
+code=$(curl -fsS "${RESOLVE[@]}" -o /dev/null -w '%{http_code}' "$WEB_URL")
+if [ "${API_ONLY:-0}" = "1" ]; then
+  pass "API health ($WEB_URL) -> HTTP $code"
+else
+  pass "client web ($WEB_URL) -> HTTP $code"
+fi
+
+about_file=$(mktemp)
+trap 'rm -f "$about_file"' EXIT
+curl -fsS "${RESOLVE[@]}" -o "$about_file" "$ABOUT_URL"
+jq -e '
+  (.server.current_time | type == "number") and
+  (.server.services | type == "array") and
+  (.server.token | type == "string")
+' "$about_file" >/dev/null
+pass "about Rust ($ABOUT_URL) -> contrat valide"
+
+set +e
+ws_code=$(curl "${RESOLVE[@]}" --http1.1 --max-time 2 --silent --output /dev/null \
+  --write-out '%{http_code}' \
+  -H 'Connection: Upgrade' \
+  -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Key: SGVsbG9PcHNXQXJkZW4hIQ==' \
+  "$WS_URL")
+ws_exit=$?
+set -e
+if [ "$ws_code" != "101" ] || { [ "$ws_exit" -ne 0 ] && [ "$ws_exit" -ne 28 ]; }; then
+  echo ">> ERREUR: handshake WebSocket attendu 101, reçu $ws_code (curl=$ws_exit)" >&2
+  exit 1
+fi
+pass "WebSocket ($WS_URL) -> HTTP 101"
 
 echo "== État du cluster =="
-kubectl get pods -o wide
-kubectl get svc,ingress
-kubectl -n kube-public get pods,svc -o wide
+KUBE_ARGS=()
+if [ -n "${EXPECTED_CONTEXT:-}" ]; then
+  KUBE_ARGS+=(--context "$EXPECTED_CONTEXT")
+fi
+APP_NAMESPACE="${NAMESPACE:-default}"
+kubectl "${KUBE_ARGS[@]}" --namespace "$APP_NAMESPACE" get pods -o wide
+kubectl "${KUBE_ARGS[@]}" --namespace "$APP_NAMESPACE" get svc,ingress
+kubectl "${KUBE_ARGS[@]}" --namespace kube-public get pods,svc -o wide
 
 echo "== Smoke test OK =="

@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
-  namespace: default
   labels:
     app: redis
 spec:
@@ -15,9 +14,28 @@ spec:
       labels:
         app: redis
     spec:
+      serviceAccountName: redis-sa
+      automountServiceAccountToken: false
       containers:
         - name: redis
-          image: redis:8-alpine
+          image: redis@sha256:8096655e437712b07503796fb64d81359256cfcff0ab29d95a7da72863786efb
           ports:
             - containerPort: 6379
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
       restartPolicy: Always

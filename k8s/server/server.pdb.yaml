@@ -1,12 +1,8 @@
-# PodDisruptionBudget pour le server OpsWarden (API Rust/Axum).
-# TEMPLATE — le Deployment référencé (k8s/server/deployment.yaml) est un
-# placeholder ; appliquer ceci une fois l'image du server déployée. Un PDB sans
-# pod correspondant est inerte : l'appliquer en avance est sans danger.
+# PodDisruptionBudget du serveur OpsWarden (API Rust/Axum).
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: server
-  namespace: default
 spec:
   minAvailable: 1
   selector:

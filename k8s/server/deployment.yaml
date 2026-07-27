@@ -1,16 +1,117 @@
-# OpsWarden -- server (Rust / Axum) -- PLACEHOLDER (pas encore deploye en k8s).
-#
-# Le serveur applicatif n'a pas encore d'image publiee ni de deploiement cloud.
-# Quand l'image existera (ghcr.io/opswarden-git/opswarden-server) et que l'app
-# sera stable, remplir ce dossier avec :
-#   - deployment.yaml : Deployment (replicas, pod anti-affinity, env via
-#                       ConfigMap/Secret, probes /health, resources.requests.cpu)
-#   - service.yaml    : Service ClusterIP sur :8080
-#   - ingress.yaml    : route Traefik (ex. api.opswarden.example),
-#                       spec.ingressClassName: traefik (cf. k8s/traefik/)
-#
-# Durcissement deja pret a appliquer (templates dans ce dossier) :
-#   - server.hpa.yaml : HorizontalPodAutoscaler CPU (besoin de requests.cpu)
-#   - server.pdb.yaml : PodDisruptionBudget (>=1 replica au drain)
-#
-# Exemple de service reel et complet : voir k8s/postgres/.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  labels:
+    app: server
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: server
+  template:
+    metadata:
+      labels:
+        app: server
+    spec:
+      serviceAccountName: server-sa
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: server
+                topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: database-migrations
+          image: invalid.invalid/opswarden-server:must-be-replaced-by-make
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: opswarden-migrator-secret
+          env:
+            - name: OPSWARDEN_MIGRATE_ONLY
+              value: "1"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+      containers:
+        - name: server
+          image: invalid.invalid/opswarden-server:must-be-replaced-by-make
+          # `make deploy-app` replaces this reference locally before applying the
+          # Deployment. Production inputs are required to use a sha256 digest.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: server-config
+            - secretRef:
+                name: opswarden-server-secret
+          env:
+            - name: OPSWARDEN_SKIP_MIGRATIONS
+              value: "1"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault

@@ -17,7 +17,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: cadvisor
-          image: gcr.io/cadvisor/cadvisor:latest
+          image: gcr.io/cadvisor/cadvisor@sha256:3de2bd5203120b866d74a9b283b2ffb8ec382fbf9dc321814700c6ea6f44ec57
           ports:
             - name: http
               containerPort: 8080

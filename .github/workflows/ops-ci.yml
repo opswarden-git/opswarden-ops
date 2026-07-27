@@ -21,13 +21,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install validation utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gettext-base shellcheck
 
       - name: Prettier check (yaml / md / json)
         run: npx --yes prettier --check "**/*.{yaml,yml,md,json}"
 
+      - name: Shellcheck deployment scripts
+        run: shellcheck scripts/*.sh
+
+      - name: Reject plaintext secret manifests
+        run: make check-plaintext-secret-manifests
+
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_wrapper: false
 
@@ -42,11 +55,24 @@ jobs:
 
       - name: Validate Kubernetes manifests
         run: |
+          set -euo pipefail
+          rendered=$(mktemp -d)
+          TLS_ISSUER=letsencrypt-test ACME_EMAIL=test@example.invalid \
+            envsubst "\${TLS_ISSUER} \${ACME_EMAIL}" \
+            < k8s/cert-manager/letsencrypt.clusterissuer.yaml.tmpl \
+            > "$rendered/clusterissuer.yaml"
+          TLS_ISSUER=letsencrypt-test API_HOST=api.example.invalid NAMESPACE=default \
+            envsubst "\${TLS_ISSUER} \${API_HOST} \${NAMESPACE}" \
+            < k8s/server/server.ingress.tls.yaml.tmpl \
+            > "$rendered/ingress-tls.yaml"
+          mapfile -t manifests < <(find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
           docker run --rm \
             -v "$PWD:/workspace" \
+            -v "$rendered:/rendered:ro" \
             -w /workspace \
             ghcr.io/yannh/kubeconform:v0.7.0 \
             -strict \
             -ignore-missing-schemas \
             -summary \
-            $(find k8s -name '*.yaml' | sort)
+            "${manifests[@]}" \
+            /rendered/clusterissuer.yaml /rendered/ingress-tls.yaml

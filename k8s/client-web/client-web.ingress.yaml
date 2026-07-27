@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opswarden-self-hosted-web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: app.opswarden.dev
+      http:
+        paths:
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: client-web
+                port:
+                  name: http
