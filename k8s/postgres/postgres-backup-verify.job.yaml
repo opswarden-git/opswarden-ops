@@ -97,7 +97,13 @@ spec:
               initdb --username=restore_admin --auth=trust
               pg_ctl -o "-c listen_addresses='' -k /tmp" -w start
               trap 'pg_ctl -m fast -w stop' EXIT
-              gzip -dc cluster.sql.gz | psql -h /tmp -U restore_admin -d postgres -v ON_ERROR_STOP=1
+              # PostgreSQL 18 pg_dumpall records the original membership
+              # grantor. A clean cluster cannot replay that provenance when
+              # the named grantor lacks ADMIN OPTION on the granted role, so
+              # let the isolated restore superuser become the new grantor.
+              gzip -dc cluster.sql.gz \
+                | sed -E 's/ GRANTED BY [^;]+;/;/' \
+                | psql -h /tmp -U restore_admin -d postgres -v ON_ERROR_STOP=1
               psql -h /tmp -U restore_admin -d "$BACKUP_EXPECTED_DATABASE" -v ON_ERROR_STOP=1 -Atqc \
                 "SELECT to_regclass('public.users') IS NOT NULL" | grep -qx t
               psql -h /tmp -U restore_admin -d "$BACKUP_EXPECTED_DATABASE" -v ON_ERROR_STOP=1 -Atqc \
