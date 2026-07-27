@@ -30,6 +30,7 @@ MINIKUBE_CNI ?= calico
 MINIKUBE_CONTAINER_RUNTIME ?= containerd
 CERT_MANAGER_VERSION ?= v1.20.3
 TLS_ISSUER ?= letsencrypt-prod
+ACME_SERVER ?= https://acme-v02.api.letsencrypt.org/directory
 APP_HOST ?= app.opswarden.dev
 API_HOST ?= api.opswarden.dev
 BACKUP_PREFIX ?= production/postgres
@@ -67,7 +68,7 @@ K8S_MANIFESTS := $(shell find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
         fmt fmt-check validate dry-run tf-lint check-plaintext-secret-manifests \
         validate-templates secret-dry-run secret-apply secrets-dry-run secrets-apply \
         backup-enable backup-run backup-verify backup-status \
-        tls tls-status \
+        cert-manager-install tls tls-staging tls-status \
         metrics hpa pdb load harden soft-affinity hard-affinity \
         minikube minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
 
@@ -238,7 +239,24 @@ deploy-app-local: ## Déploie les images locales avec le contournement réseau N
 		API_ORIGIN=http://app.opswarden.dev:30021 \
 		ALLOW_MUTABLE_IMAGES=1 ALLOW_INSECURE_ORIGIN=1 LOCAL_PRIMARY_ONLY=1
 
-tls: ## Installe cert-manager et active Let's Encrypt (CONFIRM=ENABLE_PUBLIC_TLS)
+cert-manager-install: ## Installe cert-manager et vérifie ses CRD/webhook
+	@bash -c 'set -euo pipefail; \
+	if [ -z "$${EXPECTED_CONTEXT:-}" ]; then echo ">> Erreur: EXPECTED_CONTEXT est requis"; exit 1; fi; \
+	[ "$$(kubectl config current-context)" = "$$EXPECTED_CONTEXT" ] \
+		|| { echo ">> Erreur: contexte Kubernetes inattendu"; exit 1; }; \
+	command -v helm >/dev/null || { echo ">> Erreur: helm introuvable"; exit 1; }'
+	helm --kube-context "$${EXPECTED_CONTEXT}" upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager \
+		--version $(CERT_MANAGER_VERSION) --namespace cert-manager --create-namespace \
+		--set crds.enabled=true --wait --timeout 5m
+	@for crd in certificates.cert-manager.io certificaterequests.cert-manager.io \
+		clusterissuers.cert-manager.io challenges.acme.cert-manager.io orders.acme.cert-manager.io; do \
+		kubectl --context "$${EXPECTED_CONTEXT}" wait --for=condition=Established "crd/$$crd" --timeout=60s; \
+	done
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace cert-manager wait \
+		--for=condition=Available deployment/cert-manager deployment/cert-manager-webhook deployment/cert-manager-cainjector \
+		--timeout=180s
+
+tls: cert-manager-install ## Active Let's Encrypt public (CONFIRM=ENABLE_PUBLIC_TLS)
 	@bash -c 'set -euo pipefail; \
 	if [ "$${CONFIRM:-}" != "ENABLE_PUBLIC_TLS" ]; then \
 		echo ">> Erreur: confirmation requise: CONFIRM=ENABLE_PUBLIC_TLS"; exit 1; \
@@ -250,13 +268,9 @@ tls: ## Installe cert-manager et active Let's Encrypt (CONFIRM=ENABLE_PUBLIC_TLS
 	if [ "$$CTX" != "$$EXPECTED_CONTEXT" ]; then \
 		echo ">> Erreur: contexte courant $$CTX != $$EXPECTED_CONTEXT"; exit 1; \
 	fi; \
-	command -v helm >/dev/null || { echo ">> Erreur: helm introuvable"; exit 1; }; \
 	command -v envsubst >/dev/null || { echo ">> Erreur: envsubst introuvable (paquet gettext)"; exit 1; }'
-	helm --kube-context "$${EXPECTED_CONTEXT}" upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager \
-		--version $(CERT_MANAGER_VERSION) --namespace cert-manager --create-namespace \
-		--set crds.enabled=true --wait --timeout 5m
-	TLS_ISSUER=$(TLS_ISSUER) ACME_EMAIL="$${ACME_EMAIL}" \
-		envsubst '$${TLS_ISSUER} $${ACME_EMAIL}' \
+	TLS_ISSUER=$(TLS_ISSUER) ACME_EMAIL="$${ACME_EMAIL}" ACME_SERVER=$(ACME_SERVER) \
+		envsubst '$${TLS_ISSUER} $${ACME_EMAIL} $${ACME_SERVER}' \
 		< k8s/cert-manager/letsencrypt.clusterissuer.yaml.tmpl \
 		| kubectl --context "$${EXPECTED_CONTEXT}" apply -f -
 	kubectl --context "$${EXPECTED_CONTEXT}" wait \
@@ -267,6 +281,23 @@ tls: ## Installe cert-manager et active Let's Encrypt (CONFIRM=ENABLE_PUBLIC_TLS
 		| kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply -f -
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" \
 		wait --for=condition=Ready certificate/opswarden-api-tls --timeout=5m
+
+tls-staging: cert-manager-install ## Valide l'issuer Let's Encrypt staging sans demander de certificat public
+	@bash -c 'set -euo pipefail; \
+	if [ -z "$${EXPECTED_CONTEXT:-}" ] || [ -z "$${ACME_EMAIL:-}" ]; then \
+		echo ">> Erreur: EXPECTED_CONTEXT et ACME_EMAIL sont requis"; exit 1; fi; \
+	command -v envsubst >/dev/null || { echo ">> Erreur: envsubst introuvable"; exit 1; }'
+	TLS_ISSUER=letsencrypt-staging ACME_EMAIL="$${ACME_EMAIL}" \
+		ACME_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory \
+		envsubst '$${TLS_ISSUER} $${ACME_EMAIL} $${ACME_SERVER}' \
+		< k8s/cert-manager/letsencrypt.clusterissuer.yaml.tmpl \
+		| kubectl --context "$${EXPECTED_CONTEXT}" apply -f -
+	kubectl --context "$${EXPECTED_CONTEXT}" wait \
+		--for=condition=Ready clusterissuer/letsencrypt-staging --timeout=2m
+	@SERVER=$$(kubectl --context "$${EXPECTED_CONTEXT}" get clusterissuer letsencrypt-staging \
+		-o jsonpath='{.spec.acme.server}'); \
+	[ "$$SERVER" = "https://acme-staging-v02.api.letsencrypt.org/directory" ] \
+		|| { echo ">> Erreur: annuaire ACME staging inattendu"; exit 1; }
 
 tls-status: ## Affiche l'état cert-manager, du certificat et de l'Ingress
 	kubectl get clusterissuer $(TLS_ISSUER)
@@ -378,7 +409,8 @@ validate-templates: ## Rend et valide les manifests TLS paramétrés sans les ap
 	@bash -c 'set -euo pipefail; \
 	command -v envsubst >/dev/null || { echo ">> Erreur: envsubst introuvable"; exit 1; }; \
 	TLS_ISSUER=letsencrypt-test ACME_EMAIL=test@example.invalid \
-		envsubst '\''$${TLS_ISSUER} $${ACME_EMAIL}'\'' \
+		ACME_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory \
+		envsubst '\''$${TLS_ISSUER} $${ACME_EMAIL} $${ACME_SERVER}'\'' \
 		< k8s/cert-manager/letsencrypt.clusterissuer.yaml.tmpl \
 		| kubeconform -strict -ignore-missing-schemas -summary; \
 	TLS_ISSUER=letsencrypt-test API_HOST=api.example.invalid NAMESPACE=default \
