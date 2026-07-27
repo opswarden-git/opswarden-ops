@@ -35,16 +35,26 @@ spec:
                 topologyKey: kubernetes.io/hostname
       containers:
         - name: traefik
-          image: traefik:v3.7
+          image: traefik@sha256:652929a140a32d7cafafb13c6cdfab5376cfeff800f51397b87b524501ed02a8
           args:
             - --providers.kubernetesingress=true
             - --providers.kubernetesingress.ingressclass=traefik
+            - --providers.kubernetesingress.namespaces=$(WATCH_NAMESPACE)
             - --entrypoints.web.address=:80
+            - --entrypoints.websecure.address=:443
             - --ping=true
             - --ping.entrypoint=web
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: traefik-config
+                  key: WATCH_NAMESPACE
           ports:
             - name: web
               containerPort: 80
+            - name: websecure
+              containerPort: 443
           readinessProbe:
             httpGet:
               path: /ping
