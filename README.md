@@ -108,8 +108,6 @@ screenshots will replace the application-level ones once it is deployed.
 
 <br /><br />
 
-
-
 <br /><br />
 
 **Cluster insights — CPU, load, memory, disk & I/O**

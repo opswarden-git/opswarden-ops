@@ -22,106 +22,106 @@ spec:
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-          - podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  app: server
-              topologyKey: kubernetes.io/hostname
-            weight: 100
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: server
+                topologyKey: kubernetes.io/hostname
+              weight: 100
       automountServiceAccountToken: false
       containers:
-      - env:
-        - name: OPSWARDEN_SKIP_MIGRATIONS
-          value: "1"
-        - name: GOOGLE_OAUTH_CLIENT_ID
-          valueFrom:
-            secretKeyRef:
-              key: GOOGLE_OAUTH_CLIENT_ID
-              name: server-secret
-        - name: GOOGLE_OAUTH_CLIENT_SECRET
-          valueFrom:
-            secretKeyRef:
-              key: GOOGLE_OAUTH_CLIENT_SECRET
-              name: server-secret
-        - name: GOOGLE_OAUTH_REDIRECT_URI
-          value: https://app.opswarden.dev/api/auth/google/callback
-        envFrom:
-        - configMapRef:
-            name: server-config
-        - secretRef:
-            name: opswarden-server-secret
-        image: invalid.invalid/opswarden-server:must-be-replaced-by-make
-        imagePullPolicy: IfNotPresent
-        livenessProbe:
-          failureThreshold: 3
-          httpGet:
-            path: /health
-            port: http
-          periodSeconds: 20
-          timeoutSeconds: 2
-        name: server
-        ports:
-        - containerPort: 8080
-          name: http
-        readinessProbe:
-          failureThreshold: 3
-          httpGet:
-            path: /health
-            port: http
-          periodSeconds: 10
-          timeoutSeconds: 2
-        resources:
-          limits:
-            cpu: 1
-            memory: 512Mi
-          requests:
-            cpu: 100m
-            memory: 128Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-          runAsGroup: 10001
-          runAsNonRoot: true
-          runAsUser: 10001
-          seccompProfile:
-            type: RuntimeDefault
-        startupProbe:
-          failureThreshold: 30
-          httpGet:
-            path: /health
-            port: http
-          periodSeconds: 5
-          timeoutSeconds: 2
+        - env:
+            - name: OPSWARDEN_SKIP_MIGRATIONS
+              value: "1"
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  key: GOOGLE_OAUTH_CLIENT_ID
+                  name: server-secret
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: GOOGLE_OAUTH_CLIENT_SECRET
+                  name: server-secret
+            - name: GOOGLE_OAUTH_REDIRECT_URI
+              value: https://app.opswarden.dev/api/auth/google/callback
+          envFrom:
+            - configMapRef:
+                name: server-config
+            - secretRef:
+                name: opswarden-server-secret
+          image: invalid.invalid/opswarden-server:must-be-replaced-by-make
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 2
+          name: server
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            limits:
+              cpu: 1
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
       initContainers:
-      - env:
-        - name: OPSWARDEN_MIGRATE_ONLY
-          value: "1"
-        envFrom:
-        - secretRef:
-            name: opswarden-migrator-secret
-        image: invalid.invalid/opswarden-server:must-be-replaced-by-make
-        imagePullPolicy: IfNotPresent
-        name: database-migrations
-        resources:
-          limits:
-            cpu: 500m
-            memory: 256Mi
-          requests:
-            cpu: 50m
-            memory: 64Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-          runAsGroup: 10001
-          runAsNonRoot: true
-          runAsUser: 10001
-          seccompProfile:
-            type: RuntimeDefault
+        - env:
+            - name: OPSWARDEN_MIGRATE_ONLY
+              value: "1"
+          envFrom:
+            - secretRef:
+                name: opswarden-migrator-secret
+          image: invalid.invalid/opswarden-server:must-be-replaced-by-make
+          imagePullPolicy: IfNotPresent
+          name: database-migrations
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
       serviceAccountName: server-sa
       terminationGracePeriodSeconds: 30
