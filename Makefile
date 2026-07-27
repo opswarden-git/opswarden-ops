@@ -26,7 +26,8 @@ DOKS_KUBECONFIG := $(CURDIR)/kubeconfig
 # permettent de tester le placement des services répliqués quand le réseau hôte
 # le supporte.
 MINIKUBE_NODES ?= 2
-MINIKUBE_CNI ?= kindnet
+MINIKUBE_CNI ?= calico
+MINIKUBE_CONTAINER_RUNTIME ?= containerd
 CERT_MANAGER_VERSION ?= v1.20.3
 TLS_ISSUER ?= letsencrypt-prod
 APP_HOST ?= app.opswarden.dev
@@ -406,6 +407,7 @@ minikube: minikube-up minikube-deploy ## One-shot : cluster local + couche prêt
 
 minikube-up: ## Démarre minikube (driver docker) + metrics-server + storage
 	minikube start --nodes $(MINIKUBE_NODES) --driver=docker --cni=$(MINIKUBE_CNI) \
+		--container-runtime=$(MINIKUBE_CONTAINER_RUNTIME) \
 		--addons=metrics-server,default-storageclass,storage-provisioner
 
 minikube-deploy: ## Déploie la couche prête sur le minikube courant
