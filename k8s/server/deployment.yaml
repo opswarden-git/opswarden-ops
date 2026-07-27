@@ -31,6 +31,34 @@ spec:
                   matchLabels:
                     app: server
                 topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: database-migrations
+          image: invalid.invalid/opswarden-server:must-be-replaced-by-make
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: opswarden-migrator-secret
+          env:
+            - name: OPSWARDEN_MIGRATE_ONLY
+              value: "1"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
       containers:
         - name: server
           image: invalid.invalid/opswarden-server:must-be-replaced-by-make
@@ -45,6 +73,9 @@ spec:
                 name: server-config
             - secretRef:
                 name: opswarden-server-secret
+          env:
+            - name: OPSWARDEN_SKIP_MIGRATIONS
+              value: "1"
           startupProbe:
             httpGet:
               path: /health

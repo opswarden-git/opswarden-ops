@@ -46,7 +46,8 @@ spec:
                     sleep 2
                   done
                   pg_isready -q
-                  pg_dumpall --no-role-passwords | gzip -9 > "$run_dir/cluster.sql.gz"
+                  pg_dump --clean --if-exists --create --no-owner --no-privileges \
+                    | gzip -9 > "$run_dir/cluster.sql.gz"
                   gzip -t "$run_dir/cluster.sql.gz"
                   cd "$run_dir"
                   sha256sum cluster.sql.gz > SHA256SUMS
@@ -60,13 +61,18 @@ spec:
                 - name: PGUSER
                   valueFrom:
                     secretKeyRef:
-                      name: postgres-secret
-                      key: POSTGRES_USER
+                      name: postgres-role-secret
+                      key: BACKUP_ROLE
+                - name: PGDATABASE
+                  valueFrom:
+                    configMapKeyRef:
+                      name: postgres-config
+                      key: POSTGRES_DB
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: postgres-secret
-                      key: POSTGRES_PASSWORD
+                      name: postgres-role-secret
+                      key: BACKUP_PASSWORD
               resources:
                 requests:
                   cpu: 100m

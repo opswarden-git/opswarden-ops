@@ -1,5 +1,5 @@
 creation_rules:
-  - path_regex: '^k8s/(postgres/postgres(-backup)?|server/server)\.secret\.sops\.yaml$'
+  - path_regex: '^k8s/(postgres/postgres(-backup|-role)?|server/(server|migrator))\.secret\.sops\.yaml$'
     encrypted_regex: "^(data|stringData)$"
     age:
       - age1ms5klvwgurjz6mfecl375wzg50dfyzv607x8esw9wr8th39r4desd6x6wh

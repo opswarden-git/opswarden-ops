@@ -1,219 +1,95 @@
-# Runbook : Rotation du Credential PostgreSQL (Étape 2C)
+# PostgreSQL credential rotation (step 2C)
 
-Ce runbook détaille les opérations interactives pour finaliser la migration SCRAM et la rotation du mot de passe de l'utilisateur `postgres`.
-L'intervention est **manuelle et humaine** pour éviter la fuite du mot de passe dans les logs ou les historiques d'agents.
+OpsWarden uses four distinct PostgreSQL identities:
 
-> [!CAUTION]
-> Assurez-vous d'avoir une sauvegarde vérifiée ou un snapshot avant d'effectuer ces opérations sur un cluster de production. Ne collez **jamais** le nouveau mot de passe dans le terminal sans interface masquée.
+- `opswarden_admin`: bootstrap only, stored in `postgres-secret`;
+- `opswarden_owner`: `NOLOGIN` owner of the database and schema;
+- `opswarden_migrator`: login used only by the server init container;
+- `opswarden_runtime`: DML-only login used by the running API;
+- `opswarden_backup`: read-only login used by `pg_dump`.
 
----
+The role credentials live in `postgres-role-secret`. The migrator and runtime
+connection URLs live in separate Secrets so neither workload receives the
+other login. All real manifests are encrypted with SOPS; examples contain no
+usable credential.
 
-## 2C.0 — Audit et Préparation
+## Preconditions
 
-Vérifiez l'état de la base de données et des règles d'authentification avant toute modification :
+1. Work from the audited branch with a clean worktree.
+2. Verify a recent PostgreSQL backup and its checksum.
+3. Set `EXPECTED_CONTEXT` and `NAMESPACE`, then verify the current context.
+4. Keep the SOPS/age private key local. Never pass a password as a command-line
+   argument, paste it into chat, or print a decrypted Secret.
 
-```bash
-export EXPECTED_CONTEXT=minikube
-export NAMESPACE=default
+## Rotation sequence
 
-kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  exec deployment/postgres -- \
-  sh -ec '
-    psql -X -v ON_ERROR_STOP=1 \
-      -U "$POSTGRES_USER" \
-      -d "$POSTGRES_DB" \
-      -c "SHOW password_encryption;" \
-      -c "SHOW hba_file;" \
-      -c "SELECT rule_number, line_number, type, database, user_name, address, auth_method, error
-          FROM pg_hba_file_rules
-          ORDER BY rule_number;"
-  '
-```
-
-### Sauvegarde logique (Recommandé)
-
-Sur Minikube ou avant toute opération délicate, réalisez une sauvegarde :
+Generate independent random values locally for the admin, migrator, runtime and
+backup logins. Update encrypted values with `sops set --value-stdin`; update the
+two database URLs in the same local session so they remain coherent with the
+role bundle. Validate without displaying plaintext:
 
 ```bash
-BACKUP_DIR="$HOME/.local/share/opswarden/backups"
-mkdir -p "$BACKUP_DIR"
-chmod 700 "$BACKUP_DIR"
-
-BACKUP_FILE="$BACKUP_DIR/postgres-before-rotation-$(date +%Y%m%d-%H%M%S).dump"
-
-kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  exec deployment/postgres -- \
-  sh -ec '
-    pg_dump \
-      -U "$POSTGRES_USER" \
-      -d "$POSTGRES_DB" \
-      --format=custom
-  ' > "$BACKUP_FILE"
-
-chmod 600 "$BACKUP_FILE"
-test -s "$BACKUP_FILE"
-pg_restore --list "$BACKUP_FILE" >/dev/null
-echo "Backup réussi : $BACKUP_FILE"
+nix develop -c make secret-dry-run \
+  SECRET_FILE=k8s/postgres/postgres-role.secret.sops.yaml \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE"
+nix develop -c make secret-dry-run \
+  SECRET_FILE=k8s/server/migrator.secret.sops.yaml \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE"
+nix develop -c make secret-dry-run \
+  SECRET_FILE=k8s/server/server.secret.sops.yaml \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE"
 ```
 
-*Note : La commande de restauration (à titre documentaire) serait :*
-```bash
-# cat "$BACKUP_FILE" | kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" exec -i deployment/postgres -- pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" -1
-```
-
----
-
-## 2C.1 — Rotation Interactive du Rôle
-
-> [!IMPORTANT]
-> Lancez cette commande dans **votre propre terminal** et **gardez la session ouverte** en cas de problème de synchronisation pour un éventuel rollback.
+Apply the three Secrets, reconcile PostgreSQL, then restart the server:
 
 ```bash
-kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  exec -it deployment/postgres -- \
-  sh -lc '
-    exec psql -X -v ON_ERROR_STOP=1 \
-      -U "$POSTGRES_USER" \
-      -d "$POSTGRES_DB"
-  '
+for file in \
+  k8s/postgres/postgres-role.secret.sops.yaml \
+  k8s/server/migrator.secret.sops.yaml \
+  k8s/server/server.secret.sops.yaml
+do
+  nix develop -c make secret-apply \
+    SECRET_FILE="$file" \
+    EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
+    NAMESPACE="$NAMESPACE" \
+    CONFIRM=APPLY_SOPS_SECRET
+done
+
+nix develop -c make db-roles \
+  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" NAMESPACE="$NAMESPACE"
+
+kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" \
+  rollout restart deployment/server
+kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" \
+  rollout status deployment/server --timeout=180s
 ```
 
-Dans l'invite `psql`, appliquez SCRAM et le nouveau mot de passe :
+`db-roles` is idempotent. It writes SCRAM verifiers, preserves the `NOLOGIN`
+owner, reapplies least-privilege grants and default privileges, and never logs
+passwords. The running API skips migrations; only its init container receives
+the migrator URL.
 
-```sql
-SELECT current_user;
-SHOW password_encryption;
+## Evidence
 
--- Forcer SCRAM-SHA-256
-SET password_encryption = 'scram-sha-256';
+Prove all of the following without echoing connection URLs or passwords:
 
--- Saisie interactive (protégée) du nouveau mot de passe
-\password
-```
+- the bootstrap Job completed;
+- the init container completed and both API replicas are Ready;
+- runtime DML succeeds but runtime DDL is denied;
+- the backup role can read but cannot write;
+- all three login verifiers use `SCRAM-SHA-256`;
+- a connection attempt with each retired credential is rejected;
+- the encrypted files and only the intended manifests are committed.
 
-### Preuve du rejet de l'ancien credential
+## Admin credential special case
 
-Dans un **autre terminal**, confirmez que le Pod courant (qui a encore l'ancien mot de passe injecté dans son environnement) ne peut plus s'authentifier :
+Changing `POSTGRES_PASSWORD` in a Kubernetes Secret does not alter an existing
+database role. Rotate `opswarden_admin` inside an authenticated `psql` session
+first, using `\password` (hidden input), then update and apply
+`postgres.secret.sops.yaml` before closing that session. On a brand-new empty
+volume, the official PostgreSQL entrypoint creates the admin directly from the
+new Secret.
 
-```bash
-if kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  exec deployment/postgres -- \
-  sh -ec '
-    PGPASSWORD="$POSTGRES_PASSWORD" \
-      psql -w \
-        -h 127.0.0.1 \
-        -p 5432 \
-        -U "$POSTGRES_USER" \
-        -d "$POSTGRES_DB" \
-        -tAc "SELECT 1"
-  '
-then
-  echo "ERREUR : l’ancien credential est encore accepté."
-else
-  echo "Ancien credential refusé : OK"
-fi
-```
-*(L'erreur retournée est normale, elle indique une désynchronisation volontaire)*
-
----
-
-## 2C.2 — Cohérence SOPS et Kubernetes
-
-1. Éditez localement le fichier SOPS de manière interactive pour y inscrire le nouveau mot de passe :
-```bash
-EDITOR='vim -n' sops k8s/postgres/postgres.secret.sops.yaml
-```
-
-2. Validez et appliquez le nouveau Secret depuis l'environnement Nix :
-```bash
-nix develop -c make secrets-dry-run \
-  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
-  NAMESPACE="$NAMESPACE"
-
-nix develop -c make secrets-apply \
-  EXPECTED_CONTEXT="$EXPECTED_CONTEXT" \
-  NAMESPACE="$NAMESPACE" \
-  CONFIRM=APPLY_POSTGRES_SECRET
-```
-
-3. Déclenchez un redémarrage contrôlé du Deployment pour injecter la nouvelle variable d'environnement :
-```bash
-kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  rollout restart deployment/postgres
-
-kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  rollout status deployment/postgres \
-  --timeout=180s
-```
-
-4. Validez l'accès TCP avec le nouveau credential :
-```bash
-kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  exec deployment/postgres -- \
-  sh -ec '
-    PGPASSWORD="$POSTGRES_PASSWORD" \
-      psql -w \
-        -h 127.0.0.1 \
-        -p 5432 \
-        -U "$POSTGRES_USER" \
-        -d "$POSTGRES_DB" \
-        -tAc "SELECT 1"
-  '
-```
-*(Résultat attendu : `1`)*
-
-5. Vérifiez la persistance des données :
-```bash
-kubectl --context "$EXPECTED_CONTEXT" \
-  --namespace "$NAMESPACE" \
-  exec deployment/postgres -- \
-  sh -ec '
-    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-      -c "SELECT * FROM test_persist;"
-  '
-```
-
-6. Retournez dans votre session `psql` d'administration toujours ouverte et vérifiez que le vérificateur stocké est bien SCRAM :
-```sql
-SELECT rolpassword LIKE 'SCRAM-SHA-256$%' AS uses_scram
-FROM pg_authid
-WHERE rolname = current_user;
-```
-*(Résultat attendu : `t`)*
-
-Vous pouvez fermer la session `psql` d'administration si tous ces tests sont au vert.
-
-### Validation finale et Commit
-
-Il est **impératif** de versionner le nouveau Secret chiffré dans Git pour éviter qu'un futur déploiement ne réintroduise l'ancien mot de passe compromis :
-
-```bash
-git add k8s/postgres/postgres.secret.sops.yaml
-git status --short
-git diff --cached --check
-git commit -m "ops: rotate postgres administrative credential"
-```
-*(Vérifiez avec `git status --short` que seul le fichier SOPS chiffré a changé)*
-
-> **Note sur la migration SCRAM** : Cette étape 2C crée un verifier SCRAM pour le rôle `postgres` et stocke le mot de passe sous ce format. La conversion explicite du fichier `pg_hba.conf` (règles `md5` vers `scram-sha-256`) fera l'objet d'une future **Étape 2D** séparée, après l'audit des clients.
-
----
-
-## ⚠️ Rollback
-
-Si le déploiement échoue ou que l'authentification est bloquée, **ne revenez jamais à l'ancien mot de passe compromis**.
-Gardez la session `psql` ouverte tant que le nouveau Pod n'a pas réussi son test TCP et que le Secret SOPS n'est pas commité. Ne fermez jamais cette session après le simple succès de `secrets-apply`.
-
-Utilisez les diagnostics suivants :
-
-* **PostgreSQL modifié, SOPS non appliqué ou divergent** : Utilisez la session `psql` restée ouverte pour définir un *troisième* mot de passe de secours, puis alignez SOPS dessus.
-* **Secret appliqué avec une mauvaise valeur** : Corrigez le fichier SOPS pour correspondre au mot de passe de la base et réappliquez-le.
-* **Rollout défaillant mais Secret correct** : Ne changez pas le mot de passe ; diagnostiquez le Pod et réparez le Deployment.
-* **Session de secours perdue** : Vérifiez l'accès de l'utilisateur `postgres` via la socket locale du conteneur (accès peer/local non protégé) avant de vous y fier pour rétablir les accès.
+Never roll back to a retired password. If reconciliation fails, retain the
+authenticated admin session, create a third fresh value, align SOPS with it,
+and rerun the dry-run and reconciliation gates.

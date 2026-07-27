@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-role-bootstrap
+data:
+  reconcile.sql: |
+    \set ON_ERROR_STOP on
+    \getenv owner_role OWNER_ROLE
+    \getenv migrator_role MIGRATOR_ROLE
+    \getenv migrator_password MIGRATOR_PASSWORD
+    \getenv runtime_role RUNTIME_ROLE
+    \getenv runtime_password RUNTIME_PASSWORD
+    \getenv backup_role BACKUP_ROLE
+    \getenv backup_password BACKUP_PASSWORD
+    \getenv database_name PGDATABASE
+
+    SET password_encryption = 'scram-sha-256';
+
+    SELECT format('CREATE ROLE %I NOLOGIN', :'owner_role')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'owner_role') \gexec
+
+    SELECT format('CREATE ROLE %I LOGIN', :'migrator_role')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'migrator_role') \gexec
+    SELECT format(
+      'ALTER ROLE %I NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+      :'migrator_role', :'migrator_password'
+    ) \gexec
+
+    SELECT format('CREATE ROLE %I LOGIN', :'runtime_role')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'runtime_role') \gexec
+    SELECT format(
+      'ALTER ROLE %I NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+      :'runtime_role', :'runtime_password'
+    ) \gexec
+
+    SELECT format('CREATE ROLE %I LOGIN', :'backup_role')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'backup_role') \gexec
+    SELECT format(
+      'ALTER ROLE %I NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+      :'backup_role', :'backup_password'
+    ) \gexec
+
+    SELECT format('GRANT %I TO %I', :'owner_role', :'migrator_role') \gexec
+    SELECT format('GRANT pg_read_all_data TO %I', :'backup_role') \gexec
+    SELECT format('ALTER DATABASE %I OWNER TO %I', :'database_name', :'owner_role') \gexec
+    SELECT format('ALTER SCHEMA public OWNER TO %I', :'owner_role') \gexec
+    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
+    SELECT format('ALTER TABLE %I.%I OWNER TO %I', n.nspname, c.relname, :'owner_role')
+    FROM pg_class AS c
+    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'v', 'm', 'f') \gexec
+    SELECT format('ALTER SEQUENCE %I.%I OWNER TO %I', n.nspname, c.relname, :'owner_role')
+    FROM pg_class AS c
+    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'S' \gexec
+
+    SELECT format(
+      'ALTER ROLE %I IN DATABASE %I SET ROLE TO %I',
+      :'migrator_role', :'database_name', :'owner_role'
+    ) \gexec
+    SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'database_name', :'runtime_role') \gexec
+    SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'runtime_role') \gexec
+    SELECT format(
+      'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %I',
+      :'runtime_role'
+    ) \gexec
+    SELECT format(
+      'GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO %I',
+      :'runtime_role'
+    ) \gexec
+    SELECT format(
+      'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I',
+      :'owner_role', :'runtime_role'
+    ) \gexec
+    SELECT format(
+      'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO %I',
+      :'owner_role', :'runtime_role'
+    ) \gexec

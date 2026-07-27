@@ -106,6 +106,9 @@ spec:
         - podSelector:
             matchLabels:
               app: postgres-backup
+        - podSelector:
+            matchLabels:
+              app: postgres-role-bootstrap
       ports:
         - protocol: TCP
           port: 5432
@@ -131,6 +134,27 @@ spec:
         - protocol: TCP
           port: 6379
   egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-role-bootstrap
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres-role-bootstrap
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -106,6 +106,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: postgres-backup-config
+          env:
+            - name: BACKUP_EXPECTED_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-config
+                  key: POSTGRES_DB
           resources:
             requests:
               cpu: 250m

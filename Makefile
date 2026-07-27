@@ -44,6 +44,8 @@ DATA       := k8s/postgres/postgres.configmap.yaml \
               k8s/postgres/postgres.deployment.yaml k8s/postgres/postgres.service.yaml \
               k8s/redis/redis.configmap.yaml k8s/redis/redis.sa.yaml \
               k8s/redis/redis.deployment.yaml k8s/redis/redis.service.yaml
+POSTGRES_ROLE_SUPPORT := k8s/postgres/postgres-roles.configmap.yaml \
+                         k8s/postgres/postgres-roles.sa.yaml
 LB         := k8s/traefik/traefik.ingressclass.yaml k8s/traefik/traefik.rbac.yaml \
               k8s/traefik/traefik.deployment.yaml k8s/traefik/traefik.service.yaml
 TRAEFIK_APP_RBAC := k8s/traefik/traefik.app-secrets.rbac.yaml
@@ -61,7 +63,7 @@ READY_MANIFESTS := $(DATA) $(LB)
 K8S_MANIFESTS := $(shell find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
 
 .DEFAULT_GOAL := help
-.PHONY: help all backend-init infra kubeconfig deploy deploy-server deploy-self-hosted-web deploy-app deploy-app-local db-check hosts smoke status destroy \
+.PHONY: help all backend-init infra kubeconfig deploy db-roles deploy-server deploy-self-hosted-web deploy-app deploy-app-local db-check hosts smoke status destroy \
         fmt fmt-check validate dry-run tf-lint check-plaintext-secret-manifests \
         validate-templates secret-dry-run secret-apply secrets-dry-run secrets-apply \
         backup-enable backup-run backup-verify backup-status \
@@ -119,17 +121,16 @@ deploy: ## Applique la couche prête (data + traefik), dans l'ordre
 		echo ">> Erreur: Le contexte courant ($$CTX) ne correspond pas au contexte attendu ($$EXPECTED_CONTEXT)"; \
 		exit 1; \
 	fi; \
-	if ! kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" get secret postgres-secret >/dev/null 2>&1; then \
-		echo ">> ERREUR: Le secret postgres-secret est introuvable sur le cluster."; \
-		echo ">> Veuillez appliquer le secret SOPS avant de déployer :"; \
-		echo ">>   make secrets-dry-run EXPECTED_CONTEXT=$$EXPECTED_CONTEXT NAMESPACE=$$NAMESPACE"; \
-		echo ">>   make secrets-apply EXPECTED_CONTEXT=$$EXPECTED_CONTEXT NAMESPACE=$$NAMESPACE CONFIRM=APPLY_POSTGRES_SECRET"; \
-		exit 1; \
-	fi'
+	for secret in postgres-secret postgres-role-secret; do \
+		if ! kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" get secret "$$secret" >/dev/null 2>&1; then \
+			echo ">> ERREUR: Le secret $$secret est introuvable sur le cluster."; exit 1; \
+		fi; \
+	done'
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply $(addprefix -f ,$(DATA))
 	@echo ">> Attente de postgres & redis..."
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" rollout status deploy/postgres --timeout=180s
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" rollout status deploy/redis --timeout=120s
+	$(MAKE) db-roles EXPECTED_CONTEXT="$${EXPECTED_CONTEXT}" NAMESPACE="$${NAMESPACE}"
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public create configmap traefik-config \
 		--from-literal=WATCH_NAMESPACE="$${NAMESPACE}" --dry-run=client -o yaml \
 		| kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public apply -f -
@@ -145,6 +146,25 @@ deploy: ## Applique la couche prête (data + traefik), dans l'ordre
 	fi
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public rollout status deploy/traefik --timeout=120s
 	@echo ">> Infrastructure prête. Lancez 'make deploy-server' après publication de l'image et création du secret applicatif."
+
+db-roles: ## Réconcilie propriétaire, migrateur, runtime et lecteur de sauvegarde PostgreSQL
+	@bash -c 'set -euo pipefail; \
+	if [ -z "$${EXPECTED_CONTEXT:-}" ] || [ -z "$${NAMESPACE:-}" ]; then \
+		echo ">> Erreur: EXPECTED_CONTEXT et NAMESPACE doivent être définis"; exit 1; fi; \
+	[ "$$(kubectl config current-context)" = "$$EXPECTED_CONTEXT" ] \
+		|| { echo ">> Erreur: contexte Kubernetes inattendu"; exit 1; }; \
+	for secret in postgres-secret postgres-role-secret; do \
+		kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" get secret "$$secret" >/dev/null 2>&1 \
+			|| { echo ">> Erreur: secret $$secret absent"; exit 1; }; \
+	done'
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply \
+		$(addprefix -f ,$(POSTGRES_ROLE_SUPPORT))
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" delete \
+		job/postgres-role-bootstrap --ignore-not-found --wait=true
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply \
+		-f k8s/postgres/postgres-roles.job.yaml
+	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" wait \
+		--for=condition=Complete job/postgres-role-bootstrap --timeout=180s
 
 deploy-server: ## Déploie le serveur Rust nominal (secret applicatif requis)
 	@bash -c 'set -euo pipefail; \
@@ -171,10 +191,10 @@ deploy-server: ## Déploie le serveur Rust nominal (secret applicatif requis)
 	if [ "$$CTX" != "$$EXPECTED_CONTEXT" ]; then \
 		echo ">> Erreur: contexte courant $$CTX != $$EXPECTED_CONTEXT"; exit 1; \
 	fi; \
-	if ! kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" get secret opswarden-server-secret >/dev/null 2>&1; then \
-		echo ">> ERREUR: secret opswarden-server-secret absent"; \
-		echo ">> Créez-le avec SOPS à partir de k8s/server/server.secret.example.yaml"; exit 1; \
-	fi'
+	for secret in opswarden-server-secret opswarden-migrator-secret; do \
+		kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" get secret "$$secret" >/dev/null 2>&1 \
+			|| { echo ">> ERREUR: secret $$secret absent"; exit 1; }; \
+	done'
 	kubectl create configmap server-config --namespace "$${NAMESPACE}" \
 		--from-literal=OPSWARDEN_WEB_ORIGIN="$${PUBLIC_ORIGIN}" \
 		--from-literal=OPSWARDEN_TRUSTED_PROXY_HOPS=1 \
@@ -183,7 +203,8 @@ deploy-server: ## Déploie le serveur Rust nominal (secret applicatif requis)
 		--dry-run=client -o yaml \
 		| kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply -f -
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply $(addprefix -f ,$(SERVER_SUPPORT))
-	kubectl set image --local -f k8s/server/deployment.yaml server="$${SERVER_IMAGE}" -o yaml \
+	kubectl set image --local -f k8s/server/deployment.yaml \
+		server="$${SERVER_IMAGE}" database-migrations="$${SERVER_IMAGE}" -o yaml \
 		| kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply -f -
 	@if [ "$${LOCAL_PRIMARY_ONLY:-0}" = "1" ]; then \
 		PATCH='{"spec":{"template":{"spec":{"nodeSelector":{"minikube.k8s.io/primary":"true"}}}}}'; \
@@ -273,7 +294,7 @@ backup-enable: ## Active les sauvegardes chiffrées Spaces (CONFIRM=ENABLE_BACKU
 	CTX=$$(kubectl config current-context); \
 	[ "$$CTX" = "$$EXPECTED_CONTEXT" ] \
 		|| { echo ">> Erreur: contexte courant $$CTX != $$EXPECTED_CONTEXT"; exit 1; }; \
-	for secret in postgres-secret postgres-backup-secret; do \
+	for secret in postgres-role-secret postgres-backup-secret; do \
 		kubectl --context "$$EXPECTED_CONTEXT" --namespace "$$NAMESPACE" get secret "$$secret" >/dev/null 2>&1 \
 			|| { echo ">> Erreur: secret $$secret absent"; exit 1; }; \
 	done'
@@ -463,10 +484,12 @@ secret-dry-run: ## Valide un SECRET_FILE SOPS autorisé contre le cluster
 	if [ -z "$${SECRET_FILE:-}" ] || [ -z "$${EXPECTED_CONTEXT:-}" ] || [ -z "$${NAMESPACE:-}" ]; then \
 		echo ">> Erreur: SECRET_FILE, EXPECTED_CONTEXT et NAMESPACE sont requis"; exit 1; fi; \
 	case "$$SECRET_FILE" in \
-		k8s/postgres/postgres.secret.sops.yaml|k8s/postgres/postgres-backup.secret.sops.yaml|k8s/server/server.secret.sops.yaml) ;; \
+		k8s/postgres/postgres.secret.sops.yaml|k8s/postgres/postgres-role.secret.sops.yaml|k8s/postgres/postgres-backup.secret.sops.yaml|k8s/server/server.secret.sops.yaml|k8s/server/migrator.secret.sops.yaml) ;; \
 		*) echo ">> Erreur: SECRET_FILE hors de la liste autorisée"; exit 1 ;; \
 	esac; \
 	[ -f "$$SECRET_FILE" ] || { echo ">> Erreur: $$SECRET_FILE introuvable"; exit 1; }; \
+	if sops -d "$$SECRET_FILE" | grep -qE "(^|[[:space:]])(placeholder|REQUIRES_CLOUD_CREDENTIAL)([[:space:]]|$$)"; then \
+		echo ">> Erreur: $$SECRET_FILE contient encore une valeur bloquante"; exit 1; fi; \
 	CTX=$$(kubectl config current-context); [ "$$CTX" = "$$EXPECTED_CONTEXT" ] \
 		|| { echo ">> Erreur: contexte courant $$CTX != $$EXPECTED_CONTEXT"; exit 1; }; \
 	sops -d "$$SECRET_FILE" | yq "del(.metadata.namespace)" | kubeconform -strict -summary; \
