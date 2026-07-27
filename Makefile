@@ -465,18 +465,16 @@ harden: pdb hpa ## Applique PDB + HPA (ce qui est prêt)
 minikube: minikube-up minikube-deploy ## One-shot : cluster local + couche prête
 	@echo ">> Fait. Ensuite : 'make minikube-smoke' pour vérifier."
 
-minikube-host-preflight: ## Vérifie les sysctls ARP requis par Calico avec le driver Docker
+minikube-host-preflight: ## Vérifie le sysctl ARP causal requis par Calico avec le driver Docker
 	@bash -c 'set -euo pipefail; \
-	for key in net.ipv4.conf.all.arp_ignore net.ipv4.conf.default.arp_ignore \
-		net.ipv4.conf.all.arp_filter net.ipv4.conf.default.arp_filter; do \
-		value=$$(sysctl -n "$$key"); \
-		if [ "$$value" != "0" ]; then \
-			echo ">> Erreur: $$key=$$value; Calico requiert 0 avec le driver Docker."; \
-			echo ">> NixOS: définir boot.kernel.sysctl pour les quatre clés ARP à 0, reconstruire, puis relancer."; \
-			exit 1; \
-		fi; \
-	done; \
-	echo ">> Préflight ARP hôte compatible avec Calico: OK"'
+	key=net.ipv4.conf.all.arp_ignore; \
+	value=$$(sysctl -n "$$key"); \
+	if [ "$$value" != "0" ]; then \
+		echo ">> Erreur: $$key=$$value; les pods Calico en /32 ne peuvent pas répondre à la requête ARP du veth hôte."; \
+		echo ">> NixOS: définir boot.kernel.sysctl.\"$$key\" = 0, reconstruire, puis relancer."; \
+		exit 1; \
+	fi; \
+	echo ">> Préflight ARP hôte compatible avec Calico: $$key=0"'
 
 minikube-up: minikube-host-preflight ## Démarre minikube (driver docker) + metrics-server + storage
 	minikube start --nodes $(MINIKUBE_NODES) --driver=docker --cni=$(MINIKUBE_CNI) \
