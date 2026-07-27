@@ -1,8 +1,86 @@
-# OpsWarden -- client-web (Next.js) -- PLACEHOLDER.
-#
-# Deux options de deploiement (cf. roadmap) :
-#   a) Vercel (recommande pour le web) -- alors ce dossier reste vide.
-#   b) k8s ici -- remplir : deployment.yaml (image opswarden-client-web),
-#      service.yaml (:8081), ingress.yaml (route Traefik, ex. app.opswarden.example).
-#
-# A remplir quand le front sera pret et que l'option de deploiement sera tranchee.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-web
+  labels:
+    app: client-web
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: client-web
+  template:
+    metadata:
+      labels:
+        app: client-web
+    spec:
+      serviceAccountName: client-web-sa
+      automountServiceAccountToken: false
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: client-web
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: client-web
+          image: invalid.invalid/opswarden-client-web:must-be-replaced-by-make
+          # `make deploy-app` replaces this reference locally before applying the
+          # Deployment. Production inputs are required to use a sha256 digest.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          startupProbe:
+            httpGet:
+              path: /en
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /en
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /en
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: next-cache
+              mountPath: /app/client-web/.next/cache
+      volumes:
+        - name: next-cache
+          emptyDir: {}
