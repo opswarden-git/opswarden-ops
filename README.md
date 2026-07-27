@@ -45,7 +45,7 @@ cloud showcase** — it must never be a prerequisite to run the product.
 > Status: the complete core stack—Traefik, PostgreSQL, Redis, Rust server and
 > Next.js client—has passed local two-node deployment and end-to-end product
 > checks. The DOKS production path, immutable GHCR releases, public DNS and TLS
-> issuance remain pending. The optional AI SRE and worker services are not part
+> issuance remain pending. The optional services are not part
 > of the core product deployment.
 > See the current [deployment audit](docs/deployment-audit.md) for the verified
 > state, production blockers and rollout order.
@@ -108,9 +108,7 @@ screenshots will replace the application-level ones once it is deployed.
 
 <br /><br />
 
-**Worker pool detail — provisioned & tagged by Terraform**
 
-<img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/cluster-resources.png" alt="Worker pool nodes running on DigitalOcean" width="100%" />
 
 <br /><br />
 

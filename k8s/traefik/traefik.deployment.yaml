@@ -44,6 +44,9 @@ spec:
             - --entrypoints.websecure.address=:443
             - --ping=true
             - --ping.entrypoint=web
+            - --metrics.prometheus=true
+            - --metrics.prometheus.addEntryPointsLabels=true
+            - --metrics.prometheus.addServicesLabels=true
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: observability
+data:
+  prometheus.yml: |-
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      - job_name: 'kubernetes-nodes-cadvisor'
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+        metric_relabel_configs:
+          - action: replace
+            source_labels: [id]
+            regex: '^/machine\.slice/machine-rkt\\x2d([^\\]+)\\.+/([^/]+)\.service$'
+            target_label: rkt_container_name
+            replacement: '${2}-${1}'
+          - action: replace
+            source_labels: [id]
+            regex: '^/system\.slice/(.+)\.service$'
+            target_label: systemd_service_name
+            replacement: '${1}'
+      - job_name: 'traefik'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: traefik
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: web
+            action: keep
+      - job_name: 'cadvisor-daemonset'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: cadvisor
+            action: keep
