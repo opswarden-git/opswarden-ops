@@ -141,10 +141,6 @@ deploy: ## Applique la couche prête (data + traefik), dans l'ordre
 		$(addprefix -f ,$(DEFAULT_NETWORK_POLICIES))
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public apply \
 		-f $(TRAEFIK_NETWORK_POLICY)
-	@if [ "$${LOCAL_PRIMARY_ONLY:-0}" = "1" ]; then \
-		TRAEFIK_PATCH='{"spec":{"replicas":1,"template":{"spec":{"nodeSelector":{"minikube.k8s.io/primary":"true"},"hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}}}'; \
-		kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public patch deploy/traefik --type=merge -p "$$TRAEFIK_PATCH"; \
-	fi
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public rollout status deploy/traefik --timeout=120s
 	@echo ">> Infrastructure prête. Lancez 'make deploy-server' après publication de l'image et création du secret applicatif."
 
@@ -207,12 +203,6 @@ deploy-server: ## Déploie le serveur Rust nominal (secret applicatif requis)
 	kubectl set image --local -f k8s/server/deployment.yaml \
 		server="$${SERVER_IMAGE}" database-migrations="$${SERVER_IMAGE}" -o yaml \
 		| kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply -f -
-	@if [ "$${LOCAL_PRIMARY_ONLY:-0}" = "1" ]; then \
-		PATCH='{"spec":{"template":{"spec":{"nodeSelector":{"minikube.k8s.io/primary":"true"}}}}}'; \
-		TRAEFIK_PATCH='{"spec":{"replicas":1,"template":{"spec":{"nodeSelector":{"minikube.k8s.io/primary":"true"},"hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}}}'; \
-		kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" patch deploy/server --type=merge -p "$$PATCH"; \
-		kubectl --context "$${EXPECTED_CONTEXT}" --namespace kube-public patch deploy/traefik --type=merge -p "$$TRAEFIK_PATCH"; \
-	fi
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" rollout status deploy/server --timeout=180s
 
 deploy-self-hosted-web: ## Déploie le client Next.js optionnel dans Kubernetes
@@ -231,13 +221,13 @@ deploy-self-hosted-web: ## Déploie le client Next.js optionnel dans Kubernetes
 
 deploy-app: deploy-server deploy-self-hosted-web ## Déploie le mode Kubernetes self-hosted complet
 
-deploy-app-local: ## Déploie les images locales avec le contournement réseau NixOS/minikube
+deploy-app-local: ## Déploie les images locales sur minikube
 	$(MAKE) deploy-app EXPECTED_CONTEXT=minikube NAMESPACE=default \
 		SERVER_IMAGE=opswarden-server:local-check \
 		WEB_IMAGE=opswarden-client-web:local-check \
 		PUBLIC_ORIGIN=http://app.opswarden.dev:30021 \
 		API_ORIGIN=http://app.opswarden.dev:30021 \
-		ALLOW_MUTABLE_IMAGES=1 ALLOW_INSECURE_ORIGIN=1 LOCAL_PRIMARY_ONLY=1
+		ALLOW_MUTABLE_IMAGES=1 ALLOW_INSECURE_ORIGIN=1
 
 cert-manager-install: ## Installe cert-manager et vérifie ses CRD/webhook
 	@bash -c 'set -euo pipefail; \
@@ -482,7 +472,7 @@ minikube-up: minikube-host-preflight ## Démarre minikube (driver docker) + metr
 		--addons=metrics-server,default-storageclass,storage-provisioner
 
 minikube-deploy: ## Déploie la couche prête sur le minikube courant
-	$(MAKE) deploy EXPECTED_CONTEXT=minikube NAMESPACE=default LOCAL_PRIMARY_ONLY=1
+	$(MAKE) deploy EXPECTED_CONTEXT=minikube NAMESPACE=default
 
 minikube-hosts: ## Mappe l'IP minikube -> hôtes web/api (/etc/hosts ; NixOS-aware)
 	@IP=$$(minikube ip); LINE="$$IP $(WEB_HOST)"; \
