@@ -83,6 +83,10 @@ required before integration.
    in-band with a bearer token (not a cookie), reducing cross-site handshake
    impact, but an explicit origin policy remains defense in depth for the Vercel
    split.
+10. The reproducible web-image build succeeds, but `npm ci` reports nine
+    high-severity advisories. Their production reachability has not been triaged;
+    release is blocked until `npm audit` is reviewed without applying an
+    unreviewed breaking `--force` upgrade.
 
 ## Safe next gate
 
