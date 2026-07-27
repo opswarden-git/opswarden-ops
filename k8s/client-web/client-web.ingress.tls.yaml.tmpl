@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opswarden-self-hosted-web
+  namespace: ${NAMESPACE}
+  annotations:
+    cert-manager.io/cluster-issuer: ${TLS_ISSUER}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - ${APP_HOST}
+      secretName: opswarden-self-hosted-web-tls
+  rules:
+    - host: ${APP_HOST}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: client-web
+                port:
+                  name: http
