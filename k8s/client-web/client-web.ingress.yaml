@@ -8,6 +8,13 @@ spec:
     - host: app.opswarden.dev
       http:
         paths:
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: server
+                port:
+                  name: http
           - path: /
             pathType: Prefix
             backend:

@@ -17,6 +17,9 @@ spec:
           podSelector:
             matchLabels:
               app: traefik
+        - podSelector:
+            matchLabels:
+              app: client-web
       ports:
         - protocol: TCP
           port: 8080
