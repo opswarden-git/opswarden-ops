@@ -42,6 +42,7 @@ spec:
             - --providers.kubernetesingress.namespaces=$(WATCH_NAMESPACE)
             - --entrypoints.web.address=:80
             - --entrypoints.websecure.address=:443
+            - --entrypoints.websecure.http.tls=true
             - --ping=true
             - --ping.entrypoint=web
             - --metrics.prometheus=true

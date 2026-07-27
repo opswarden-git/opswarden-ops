@@ -1,117 +1,127 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: server
   labels:
     app: server
+  name: server
 spec:
   replicas: 2
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   selector:
     matchLabels:
       app: server
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
   template:
     metadata:
       labels:
         app: server
     spec:
-      serviceAccountName: server-sa
-      automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 30
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: server
-                topologyKey: kubernetes.io/hostname
-      initContainers:
-        - name: database-migrations
-          image: invalid.invalid/opswarden-server:must-be-replaced-by-make
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - secretRef:
-                name: opswarden-migrator-secret
-          env:
-            - name: OPSWARDEN_MIGRATE_ONLY
-              value: "1"
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            seccompProfile:
-              type: RuntimeDefault
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: server
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      automountServiceAccountToken: false
       containers:
-        - name: server
-          image: invalid.invalid/opswarden-server:must-be-replaced-by-make
-          # `make deploy-app` replaces this reference locally before applying the
-          # Deployment. Production inputs are required to use a sha256 digest.
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 8080
-          envFrom:
-            - configMapRef:
-                name: server-config
-            - secretRef:
-                name: opswarden-server-secret
-          env:
-            - name: OPSWARDEN_SKIP_MIGRATIONS
-              value: "1"
-          startupProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 10
-            timeoutSeconds: 2
-            failureThreshold: 3
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 20
-            timeoutSeconds: 2
-            failureThreshold: 3
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 1
-              memory: 512Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
-            seccompProfile:
-              type: RuntimeDefault
+      - env:
+        - name: OPSWARDEN_SKIP_MIGRATIONS
+          value: "1"
+        - name: GOOGLE_OAUTH_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: GOOGLE_OAUTH_CLIENT_ID
+              name: server-secret
+        - name: GOOGLE_OAUTH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: GOOGLE_OAUTH_CLIENT_SECRET
+              name: server-secret
+        - name: GOOGLE_OAUTH_REDIRECT_URI
+          value: https://api.opswarden.dev/api/auth/google/callback
+        envFrom:
+        - configMapRef:
+            name: server-config
+        - secretRef:
+            name: opswarden-server-secret
+        image: invalid.invalid/opswarden-server:must-be-replaced-by-make
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 20
+          timeoutSeconds: 2
+        name: server
+        ports:
+        - containerPort: 8080
+          name: http
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 1
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 2
+      initContainers:
+      - env:
+        - name: OPSWARDEN_MIGRATE_ONLY
+          value: "1"
+        envFrom:
+        - secretRef:
+            name: opswarden-migrator-secret
+        image: invalid.invalid/opswarden-server:must-be-replaced-by-make
+        imagePullPolicy: IfNotPresent
+        name: database-migrations
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          seccompProfile:
+            type: RuntimeDefault
+      serviceAccountName: server-sa
+      terminationGracePeriodSeconds: 30
