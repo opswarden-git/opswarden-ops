@@ -20,3 +20,4 @@ spec:
   tls:
     - hosts:
         - api.opswarden.dev
+      secretName: opswarden-api-tls
