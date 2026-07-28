@@ -76,6 +76,6 @@ For example, here is our detailed Node Exporter dashboard, which we use to close
 
 Work from a short-lived branch and keep changes focused on the infrastructure and deployment. Formatting, linting, type checks, tests and the production build must pass before a squash merge into `main`.
 
-## License
-
-[Apache License 2.0](LICENSE)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/ci-success.png" alt="CI Success" width="100%" />
+</p>
