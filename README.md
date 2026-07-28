@@ -17,11 +17,11 @@ This repository is the infrastructure and deployment home of OpsWarden, containi
 
 It includes the **Terraform** configuration for our DigitalOcean Kubernetes cluster, our custom **Traefik** routing setup, the **Prometheus & Grafana** observability stack, and strict **Nix** environments for reproducible deployments.
 
-## Behind the Scenes
+## What's Running?
 
 While we keep our users focused on a clean and lightning-fast interface, the engine running OpsWarden is robust, observable, and fully declarative. Here is a tour of our real-world production deployment.
 
-### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/digitalocean/digitalocean-original.svg" height="24" /> Cloud Infrastructure
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/digitalocean/digitalocean-original.svg" height="24" /> Kubernetes
 
 OpsWarden runs on a managed **DigitalOcean Kubernetes** cluster. We rely on managed node pools to handle horizontal scaling, with completely automated provisioning via Terraform.
 
@@ -35,7 +35,7 @@ OpsWarden runs on a managed **DigitalOcean Kubernetes** cluster. We rely on mana
   </tr>
 </table>
 
-### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/prometheus/prometheus-original.svg" height="24" /> Observability & Metrics
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/prometheus/prometheus-original.svg" height="24" /> Telemetry
 
 Knowing the state of the cluster is critical. We capture hardware metrics, networking throughput, and container states, aggregating them into clear dashboards with Prometheus and Grafana.
 
@@ -49,7 +49,7 @@ Knowing the state of the cluster is critical. We capture hardware metrics, netwo
   </tr>
 </table>
 
-### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/traefikproxy/traefikproxy-original.svg" height="24" /> Ingress & Traffic Management
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/traefikproxy/traefikproxy-original.svg" height="24" /> Ingress
 
 We use **Traefik** as our primary Ingress Controller, securely routing and load-balancing external HTTP and WebSocket traffic into the cluster.
 
@@ -57,7 +57,7 @@ We use **Traefik** as our primary Ingress Controller, securely routing and load-
   <img src="assets/traefik-dashboard.png" alt="Traefik Dashboard" width="100%" />
 </p>
 
-### <img src="https://api.iconify.design/simple-icons/vercel.svg" height="24" /> Edge Delivery
+### <img src="https://api.iconify.design/simple-icons/vercel.svg" height="24" /> Edge
 
 Our frontend is completely statically generated and served globally at the edge via **Vercel**, ensuring blazingly fast load times independently from the core cluster state.
 
