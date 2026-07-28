@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/opswarden-ops/heroicon.png" alt="OpsWarden" width="120" />
+  <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/heroicon.png" alt="OpsWarden" width="120" />
   <h1>OpsWarden - Infrastructure</h1>
   <p>
     <img src="https://github.com/opswarden-git/opswarden-ops/actions/workflows/ops-ci.yml/badge.svg" alt="CI" />
@@ -34,13 +34,17 @@ OpsWarden runs on a managed **DigitalOcean Kubernetes** cluster. We rely on mana
   </tr>
 </table>
 
-### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/prometheus/prometheus-original.svg" height="24" /> Telemetry
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/digitalocean/digitalocean-original.svg" height="24" /> DigitalOcean Insights
 
-Knowing the state of the cluster is critical. We capture hardware metrics, networking throughput, and container states, aggregating them into clear dashboards with Prometheus and Grafana.
+Knowing the state of the cluster is critical. We capture hardware metrics and networking throughput directly from DigitalOcean.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/do-cluster-insights.png" alt="DigitalOcean Cluster Insights" width="100%" />
 </p>
+
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/grafana/grafana-original.svg" height="24" /> Grafana
+
+We aggregate container states and Prometheus metrics into clear Grafana dashboards for deep observability.
 
 <table width="100%">
   <tr>
