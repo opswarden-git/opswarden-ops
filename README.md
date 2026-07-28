@@ -39,10 +39,11 @@ OpsWarden runs on a managed **DigitalOcean Kubernetes** cluster. We rely on mana
 
 Knowing the state of the cluster is critical. We capture hardware metrics, networking throughput, and container states, aggregating them into clear dashboards with Prometheus and Grafana.
 
+<p align="center">
+  <img src="assets/do-cluster-insights.png" alt="DigitalOcean Cluster Insights" width="100%" />
+</p>
+
 <table width="100%">
-  <tr>
-    <td colspan="2"><img src="assets/do-cluster-insights.png" alt="Cluster Insights" width="100%" /></td>
-  </tr>
   <tr>
     <td width="50%"><img src="assets/grafana-dashboards.png" alt="Grafana Dashboards" width="100%" /></td>
     <td width="50%"><img src="assets/grafana-node-exporter.png" alt="Grafana Node Exporter" width="100%" /></td>
