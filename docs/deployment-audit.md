@@ -1,7 +1,7 @@
-# Contradictory deployment audit
+# Production deployment audit
 
-Snapshot: 2026-07-27. This document audits the preserved WIP candidate; it is
-not a cloud certification and records negative findings as well as evidence.
+Snapshot: 2026-07-28. This document records both verified production evidence
+and the remaining infrastructure gaps. It is not a cloud certification.
 
 ## Architecture decision
 
@@ -25,17 +25,18 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 
 ## Reproduced evidence
 
-- frontend lint, formatting, type checking, 49 test files and 209 tests pass;
-- the app workflow passes `actionlint`;
-- Rust formatting passes and the four server health integration tests pass;
-- the earlier local lab reached Next.js, Rust and a WebSocket `101` and restored
-  a real PostgreSQL dump, but this does not certify DOKS, Spaces, ACME or CD;
-- the candidate branches and external format-patch backups are preserved without
-  any push, tag or deployment.
-
-Rust Clippy was not reproduced because the host toolchain has no Clippy
-component. A matching Rust dev shell or `rustup component add clippy` is still
-required before integration.
+- application CI run `30396981672` passes Rust formatting, strict Clippy,
+  backend tests and coverage, web quality and tests, desktop packaging and the
+  Playwright critical path;
+- release `v1.0.2` publishes the attested server image by immutable digest;
+- DOKS runs two ready server replicas with completed migration init containers,
+  the dedicated runtime Secret and zero container restarts;
+- PostgreSQL owner, migrator, runtime and backup roles were reconciled by the
+  production bootstrap Job after a validated custom-format database dump;
+- Let's Encrypt serves a certificate for `api.opswarden.dev`, and the public
+  health, `/about.json` and WebSocket `101` checks pass through Traefik;
+- production CD run `30398979253` reproduced the immutable rollout and smoke
+  checks from GitHub Actions at ops revision `7903eea`.
 
 ## Findings corrected on the audited branches
 
@@ -56,49 +57,45 @@ required before integration.
    migration records, rather than accepting any connectable empty database.
 9. The standalone cAdvisor manifest is optional and excluded from the production
    deployment set; it is not treated as an observability stack.
+10. The canonical Ingress references `opswarden-api-tls`; the duplicate legacy
+    Ingress was removed after the public certificate was verified.
+11. PostgreSQL now uses separate owner, migrator and DML-only runtime identities.
+    The running server cannot execute migrations with its runtime credential.
+12. The guarded GitHub production environment now performs the same immutable
+    rollout and strict public smoke test as the reviewed local procedure.
 
 ## Unresolved production blockers
 
-1. No DOKS, Spaces, DNS, Vercel, cert-manager or rollback path has been exercised
-   with production credentials. Supplying credentials is deliberately deferred.
-2. Kubernetes NetworkPolicies are absent. PostgreSQL and unauthenticated Redis
+1. The Spaces backup Secret still contains a blocking placeholder, so no remote
+   backup upload or isolated restore from Spaces is claimed. A validated local
+   pre-migration dump exists, but it is not a substitute for off-cluster backup.
+2. Kubernetes NetworkPolicies are not applied. PostgreSQL and unauthenticated Redis
    must not be called production-ready until ingress/egress policies are designed
    and tested, including ACME solver traffic and external server integrations.
-3. The PostgreSQL runtime role still needs a least-privilege grants/migration
-   design. The example rejects reuse of the owner role, but does not provision
-   roles automatically.
-4. TLS templates are statically rendered only. HTTP-to-HTTPS redirect behavior,
-   ACME HTTP-01 and certificate renewal require a live staging test.
-5. The backup path omits role passwords intentionally (`--no-role-passwords`).
+3. The backup path omits role passwords intentionally (`--no-role-passwords`).
    Recovery therefore requires the credential-rotation runbook. A real Spaces
    upload and isolated restore remain mandatory.
-6. Production rollback restores the previous server image only. It does not
+4. Production rollback restores the previous server image only. It does not
    version or restore ConfigMaps, HPA/PDB or database migrations, and a first
    deployment has no previous image.
-7. Durable metrics, alerts and centralized logs are not implemented. The pinned
-   cAdvisor manifest is suitable only for an explicit lab experiment.
-8. Mutable base-image tags remain in application Docker build stages. Runtime
+5. The Metrics API is unavailable, so the deployed HPA cannot obtain CPU
+   utilization. Durable alerts and centralized logs are not proven by this run.
+6. Mutable base-image tags remain in application Docker build stages. Runtime
    behavior is hardened, but full supply-chain reproducibility is incomplete.
-9. WebSocket handshake Origin is not allow-listed server-side. Authentication is
+7. WebSocket handshake Origin is not allow-listed server-side. Authentication is
    in-band with a bearer token (not a cookie), reducing cross-site handshake
    impact, but an explicit origin policy remains defense in depth for the Vercel
    split.
-10. The reproducible web-image build succeeds, but `npm ci` reports nine
-    high-severity advisories. Their production reachability has not been triaged;
-    release is blocked until `npm audit` is reviewed without applying an
-    unreviewed breaking `--force` upgrade.
 
 ## Safe next gate
 
-Before any credential handoff, push, tag or cloud mutation:
+Before broadening the production claim:
 
-1. review the atomic commit series and rerun all local CI, including Clippy;
-2. add and test NetworkPolicies in an isolated cluster;
-3. define database owner, migrator and runtime roles;
-4. test TLS with Let's Encrypt staging and test the server rollback path;
-5. merge only after review, then publish immutable images;
-6. provision cloud resources with credentials supplied locally, never in chat;
-7. prove backup/restore from Spaces before switching DNS.
+1. provision restricted Spaces credentials and prove upload plus isolated restore;
+2. test and apply NetworkPolicies without breaking ACME or external reactions;
+3. install and verify metrics-server before relying on the HPA;
+4. exercise the image rollback path and document migration compatibility;
+5. keep the jury demonstration on the verified immutable digest and CD run.
 
-The candidate is now reviewable, but it remains a deployment candidate rather
-than a completed production deployment.
+The API is deployed and reproducible through CD. Backup, network isolation and
+autoscaling evidence remain explicitly incomplete.
