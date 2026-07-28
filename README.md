@@ -2,23 +2,16 @@
   <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/heroicon.png" alt="OpsWarden" width="120" />
   <h1>OpsWarden - Infrastructure</h1>
   <p>
-    <a href="https://github.com/opswarden-git/opswarden-website">Landing page</a> ·
-    <a href="https://github.com/opswarden-git/opswarden">App</a> ·
-    <a href="https://opswarden-git.github.io/opswarden/">Documentation</a> ·
-    <a href="#contributing">Contributing</a>
-  </p>
-  <p>
-    <a href="https://github.com/opswarden-git/opswarden-ops/actions/workflows/ops-ci.yml"><img src="https://github.com/opswarden-git/opswarden-ops/actions/workflows/ops-ci.yml/badge.svg" alt="CI" /></a>
+    <img src="https://github.com/opswarden-git/opswarden-ops/actions/workflows/ops-ci.yml/badge.svg" alt="CI" />
     <img src="https://img.shields.io/github/v/release/opswarden-git/opswarden-ops?style=flat" alt="Release" />
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=flat" alt="License: Apache 2.0" /></a>
-  </p>
-  <p>
+    <img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=flat" alt="License: Apache 2.0" />
     <img src="https://img.shields.io/badge/Kubernetes-326ce5?style=flat&logo=kubernetes&logoColor=white" alt="Kubernetes" />
     <img src="https://img.shields.io/badge/DigitalOcean-%230167ff?style=flat&logo=digitalOcean&logoColor=white" alt="DigitalOcean" />
     <img src="https://img.shields.io/badge/Terraform-%235835CC?style=flat&logo=terraform&logoColor=white" alt="Terraform" />
     <img src="https://img.shields.io/badge/NixOS-5277C3?style=flat&logo=nixos&logoColor=white" alt="NixOS" />
     <img src="https://img.shields.io/badge/Traefik-24A1C1?style=flat&logo=traefikproxy&logoColor=white" alt="Traefik" />
   </p>
+</div>
 
 <br /><br />
 
@@ -26,9 +19,7 @@
 
 <sub><i>Reference cluster topology — to be replaced by OpsWarden's own diagram.</i></sub>
 
-</div>
 
-<br />
 
 ---
 
