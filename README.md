@@ -21,33 +21,35 @@ It includes the **Terraform** configuration for our DigitalOcean Kubernetes clus
 
 While we keep our users focused on a clean and lightning-fast interface, the engine running OpsWarden is robust, observable, and fully declarative. Here is a tour of our real-world production deployment.
 
-### Cloud Infrastructure
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/digitalocean/digitalocean-original.svg" height="24" /> Cloud Infrastructure
 
 OpsWarden runs on a managed **DigitalOcean Kubernetes** cluster. We rely on managed node pools to handle horizontal scaling, with completely automated provisioning via Terraform.
 
-<p align="center">
-  <img src="assets/do-kubernetes-clusters.png" alt="Kubernetes Clusters" width="100%" />
-</p>
-<p align="center">
-  <img src="assets/do-cluster-overview.png" alt="Cluster Overview" width="49%" />
-  &nbsp;
-  <img src="assets/do-cluster-nodes.png" alt="Cluster Nodes" width="49%" />
-</p>
+<table width="100%">
+  <tr>
+    <td colspan="2"><img src="assets/do-kubernetes-clusters.png" alt="Kubernetes Clusters" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/do-cluster-overview.png" alt="Cluster Overview" width="100%" /></td>
+    <td width="50%"><img src="assets/do-cluster-nodes.png" alt="Cluster Nodes" width="100%" /></td>
+  </tr>
+</table>
 
-### Observability & Metrics
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/prometheus/prometheus-original.svg" height="24" /> Observability & Metrics
 
 Knowing the state of the cluster is critical. We capture hardware metrics, networking throughput, and container states, aggregating them into clear dashboards with Prometheus and Grafana.
 
-<p align="center">
-  <img src="assets/do-cluster-insights.png" alt="Cluster Insights" width="100%" />
-</p>
-<p align="center">
-  <img src="assets/grafana-dashboards.png" alt="Grafana Dashboards" width="49%" />
-  &nbsp;
-  <img src="assets/grafana-node-exporter.png" alt="Grafana Node Exporter" width="49%" />
-</p>
+<table width="100%">
+  <tr>
+    <td colspan="2"><img src="assets/do-cluster-insights.png" alt="Cluster Insights" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/grafana-dashboards.png" alt="Grafana Dashboards" width="100%" /></td>
+    <td width="50%"><img src="assets/grafana-node-exporter.png" alt="Grafana Node Exporter" width="100%" /></td>
+  </tr>
+</table>
 
-### Ingress & Traffic Management
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/traefikproxy/traefikproxy-original.svg" height="24" /> Ingress & Traffic Management
 
 We use **Traefik** as our primary Ingress Controller, securely routing and load-balancing external HTTP and WebSocket traffic into the cluster.
 
@@ -55,7 +57,7 @@ We use **Traefik** as our primary Ingress Controller, securely routing and load-
   <img src="assets/traefik-dashboard.png" alt="Traefik Dashboard" width="100%" />
 </p>
 
-### Edge Delivery
+### <img src="https://api.iconify.design/simple-icons/vercel.svg" height="24" /> Edge Delivery
 
 Our frontend is completely statically generated and served globally at the edge via **Vercel**, ensuring blazingly fast load times independently from the core cluster state.
 
