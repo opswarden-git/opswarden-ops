@@ -4,9 +4,13 @@ name: Deploy production
 "on":
   workflow_dispatch:
     inputs:
+      version:
+        description: Released version to deploy, e.g. 1.0.7 (resolved to an immutable digest)
+        required: false
+        type: string
       server_image:
-        description: Immutable opswarden-server GHCR digest reference
-        required: true
+        description: "Rollback escape hatch: a full ghcr.io/...@sha256:... reference. Overrides version."
+        required: false
         type: string
       confirmation:
         description: Type DEPLOY_PRODUCTION
@@ -46,6 +50,37 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Resolve the immutable server image
+        id: image
+        env:
+          VERSION: ${{ inputs.version }}
+          SERVER_IMAGE: ${{ inputs.server_image }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SERVER_IMAGE" ]; then
+            # Rollback path: an operator pinned a specific digest by hand.
+            case "$SERVER_IMAGE" in
+              *@sha256:*) ;;
+              *)
+                echo "server_image must be a digest reference, not a mutable tag" >&2
+                exit 1
+                ;;
+            esac
+            resolved=$SERVER_IMAGE
+          elif [ -n "$VERSION" ]; then
+            resolved=$(./scripts/resolve-server-digest.sh "$VERSION")
+          else
+            echo "provide either version or server_image" >&2
+            exit 1
+          fi
+          echo "resolved=$resolved" >> "$GITHUB_OUTPUT"
+          {
+            echo '## Production deploy target'
+            echo
+            echo "- Image: \`${resolved}\`"
+            echo "- Requested by: \`${GITHUB_ACTOR}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Install kubectl
         uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
         with:
@@ -70,5 +105,5 @@ jobs:
           NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
           PUBLIC_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
           API_ORIGIN: ${{ vars.API_ORIGIN }}
-          SERVER_IMAGE: ${{ inputs.server_image }}
+          SERVER_IMAGE: ${{ steps.image.outputs.resolved }}
         run: ./scripts/deploy-production.sh
