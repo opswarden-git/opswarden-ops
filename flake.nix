@@ -29,6 +29,8 @@
             nodejs_22
             sops
             age
+            rclone
+            openssl
             gettext
             actionlint
             yq-go
@@ -106,7 +108,7 @@ EOF
             
             echo ""
             echo -e "\033[1;35mQUICK START:\033[0m"
-            echo -e "  1. Set DigitalOcean and Spaces credentials in .env."
+            echo -e "  1. Configure the DO API token and separate Terraform backend keys in .env."
             echo -e "  2. Configure terraform/backend.hcl from the example."
             echo -e "  3. Provision DOKS: make infra TF_BACKEND_CONFIG=terraform/backend.hcl"
             echo -e "  4. Deploy stack:   make deploy EXPECTED_CONTEXT=<context> NAMESPACE=<namespace>"

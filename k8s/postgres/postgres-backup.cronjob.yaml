@@ -38,7 +38,9 @@ spec:
                 - |
                   set -o pipefail
                   trap 'status=$?; if [ "$status" -ne 0 ]; then touch /backup/failed; fi' EXIT
-                  umask 077
+                  # The dump and upload containers use distinct non-root UIDs
+                  # and share only fsGroup 20000 through this emptyDir.
+                  umask 027
                   run_dir=/backup/run
                   mkdir -p "$run_dir"
                   for _ in $(seq 1 30); do
