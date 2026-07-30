@@ -9,6 +9,7 @@ data:
       scrape_interval: 15s
     rule_files:
       - /etc/prometheus/opswarden-alertmanager.rules.yml
+      - /etc/prometheus/opswarden-backup.rules.yml
     scrape_configs:
       - job_name: 'prometheus'
         static_configs:
@@ -68,6 +69,18 @@ data:
           - source_labels: [__meta_kubernetes_service_name]
             regex: node-exporter
             action: keep
+      - job_name: 'kube-state-metrics'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names: [observability]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: kube-state-metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: http-metrics
+            action: keep
   opswarden-alertmanager.rules.yml: |-
     groups:
       - name: opswarden-alertmanager
@@ -103,3 +116,58 @@ data:
             annotations:
               summary: Alertmanager duplicate delivery ratio is high
               description: More than half of at least ten recent Alertmanager deliveries were semantic retries.
+  opswarden-backup.rules.yml: |-
+    groups:
+      - name: opswarden-backup
+        rules:
+          - alert: OpsWardenBackupCronJobMissing
+            expr: absent(kube_cronjob_info{cronjob="postgres-backup"})
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: OpsWarden PostgreSQL backup CronJob is missing
+              description: kube-state-metrics cannot find the postgres-backup CronJob.
+          - alert: OpsWardenBackupCronJobSuspended
+            expr: kube_cronjob_spec_suspend{cronjob="postgres-backup"} == 1
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: OpsWarden PostgreSQL backups are suspended
+              description: The postgres-backup CronJob has been suspended for at least ten minutes.
+          - alert: OpsWardenBackupJobFailed
+            expr: |
+              (
+                kube_job_failed{condition="true"} == 1
+              )
+              * on(namespace, job_name) group_left(owner_name)
+              kube_job_owner{owner_kind="CronJob", owner_name="postgres-backup"} > 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: OpsWarden scheduled PostgreSQL backup failed
+              description: A Job owned by the postgres-backup CronJob is in the Failed condition.
+          - alert: OpsWardenBackupNeverSucceeded
+            expr: |
+              (
+                time() - kube_cronjob_created{cronjob="postgres-backup"} > 93600
+              )
+              unless on(namespace, cronjob)
+              kube_cronjob_status_last_successful_time{cronjob="postgres-backup"}
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: OpsWarden PostgreSQL backup has never succeeded
+              description: The CronJob is older than the 26-hour RPO alert threshold without a successful scheduled run.
+          - alert: OpsWardenBackupStale
+            expr: |
+              time() - kube_cronjob_status_last_successful_time{cronjob="postgres-backup"} > 93600
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: OpsWarden PostgreSQL backup is stale
+              description: The last successful scheduled backup is older than the 26-hour RPO alert threshold.

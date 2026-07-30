@@ -42,6 +42,11 @@ rollback() {
 trap rollback ERR
 
 echo ">> Configuration de l'observabilité Alertmanager"
+kubectl --context "$EXPECTED_CONTEXT" apply \
+  -f k8s/observability/kube-state-metrics.rbac.yaml \
+  -f k8s/observability/kube-state-metrics.deployment.yaml
+kubectl --context "$EXPECTED_CONTEXT" --namespace observability \
+  rollout status deployment/kube-state-metrics --timeout=180s
 kubectl --context "$EXPECTED_CONTEXT" --namespace observability apply \
   -f k8s/observability/prometheus.configmap.yaml \
   -f k8s/observability/opswarden-alertmanager-dashboard.yaml
@@ -99,12 +104,24 @@ API_ONLY=1 \
     and any(.data.result[]; .value[1] == "1")
   ' <<<"$targets" >/dev/null
 
+  backup_state=$(curl --fail --silent \
+    'http://127.0.0.1:19090/api/v1/query?query=kube_cronjob_info%7Bcronjob%3D%22postgres-backup%22%7D')
+  jq -e '
+    .status == "success"
+    and any(.data.result[]; .value[1] == "1")
+  ' <<<"$backup_state" >/dev/null
+
   rules=$(curl --fail --silent http://127.0.0.1:19090/api/v1/rules)
   jq -e '
     [.data.groups[].rules[].name] as $names
     | ($names | index("OpsWardenAlertmanagerDeliveryFailed")) != null
     and ($names | index("OpsWardenAlertmanagerRejectionsHigh")) != null
     and ($names | index("OpsWardenAlertmanagerDuplicateRatioHigh")) != null
+    and ($names | index("OpsWardenBackupCronJobMissing")) != null
+    and ($names | index("OpsWardenBackupCronJobSuspended")) != null
+    and ($names | index("OpsWardenBackupJobFailed")) != null
+    and ($names | index("OpsWardenBackupNeverSucceeded")) != null
+    and ($names | index("OpsWardenBackupStale")) != null
   ' <<<"$rules" >/dev/null
 )
 
