@@ -13,6 +13,11 @@ name: Harden production
         required: false
         default: false
         type: boolean
+      apply_network_policies:
+        description: Apply and prove the production NetworkPolicy set
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -78,6 +83,14 @@ jobs:
           NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
           API_ORIGIN: ${{ vars.API_ORIGIN }}
         run: ./scripts/prove-hpa-scaling.sh
+
+      - name: Apply and prove production NetworkPolicies
+        if: inputs.apply_network_policies
+        env:
+          EXPECTED_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+          NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+        run: ./scripts/apply-network-policies.sh
 
       - name: Verify public application after hardening
         env:
