@@ -36,6 +36,23 @@ jobs:
       - name: Shellcheck deployment scripts
         run: shellcheck scripts/*.sh
 
+      - name: Require executable workflow scripts
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(
+            rg --no-filename --only-matching '\./scripts/[A-Za-z0-9._/-]+\.sh' \
+              .github/workflows |
+              sort --unique
+          )
+          for invocation in "${scripts[@]}"; do
+            script=${invocation#./}
+            mode=$(git ls-files --stage -- "$script" | awk '{print $1}')
+            if [ "$mode" != 100755 ]; then
+              echo "$script is invoked directly by a workflow but has mode ${mode:-untracked}" >&2
+              exit 1
+            fi
+          done
+
       - name: Reject plaintext secret manifests
         run: make check-plaintext-secret-manifests
 
