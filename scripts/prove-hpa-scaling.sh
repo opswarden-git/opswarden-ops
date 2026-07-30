@@ -29,8 +29,12 @@ restore() {
     [ "$desired" = 2 ] && break
     sleep 5
   done
+  if [ "$desired" != 2 ]; then
+    echo ">> ERREUR: le HPA nominal n'est pas revenu à 2 réplicas" >&2
+    status=1
+  fi
   kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" \
-    rollout status deployment/server --timeout=180s >/dev/null || true
+    rollout status deployment/server --timeout=180s >/dev/null || status=1
   exit "$status"
 }
 trap restore EXIT
