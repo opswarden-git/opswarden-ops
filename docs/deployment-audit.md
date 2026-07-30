@@ -50,6 +50,14 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 - hardening run `30565632048` observes a controlled server HPA scale event from
   two to three ready replicas, then restores the nominal policy. Follow-up run
   `30565794256` proves `replicas=2`, `desired=2` and a healthy public API.
+- hardening run `30566269859` applies the complete application-namespace
+  NetworkPolicy set in safe order. Public HTTP, `/about.json` and WebSocket
+  remain available; the backup role reaches PostgreSQL while an unlabeled pod
+  is denied.
+- deployment run `30566406249` rolls the immutable server from `v1.0.12` back
+  to `v1.0.11`; run `30566497276` restores `v1.0.12`. Both pass rollout,
+  application and Prometheus proofs. There is no SQL migration delta between
+  the two releases.
 
 ## Findings corrected on the audited branches
 
@@ -89,16 +97,17 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 1. The Spaces backup Secret still contains a blocking placeholder, so no remote
    backup upload or isolated restore from Spaces is claimed. A validated local
    pre-migration dump exists, but it is not a substitute for off-cluster backup.
-2. A targeted server ingress NetworkPolicy is applied for public traffic and
-   Prometheus metrics. The complete workload policy set is not yet claimed:
-   PostgreSQL, unauthenticated Redis, DNS, ACME and external server integrations
-   still require a staged negative-connectivity proof before broad rollout.
+2. The full application-namespace NetworkPolicy set is applied and its public,
+   database allow and default-deny paths are proven. A future ACME renewal and
+   each newly added external reaction must still be monitored against the
+   explicit egress allowlist.
 3. The backup path omits role passwords intentionally (`--no-role-passwords`).
    Recovery therefore requires the credential-rotation runbook. A real Spaces
    upload and isolated restore remain mandatory.
-4. Production rollback restores the previous server image only. It does not
-   version or restore ConfigMaps, HPA/PDB or database migrations, and a first
-   deployment has no previous image.
+4. Immutable server rollback and restoration are proven across releases with
+   no migration delta. ConfigMaps and HPA/PDB are still reconciled from Git
+   rather than captured as a single atomic release unit; irreversible database
+   migrations remain outside automated rollback.
 5. Prometheus scraping, durable Alertmanager alerts, the Kubernetes Metrics API
    and HPA scaling are proven. Centralized log alerting is not proven by this
    run.
@@ -114,12 +123,12 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 Before broadening the production claim:
 
 1. provision restricted Spaces credentials and prove upload plus isolated restore;
-2. stage and apply the remaining workload NetworkPolicies with explicit
-   negative-connectivity tests, without breaking ACME or external reactions;
-3. exercise the image rollback path and document migration compatibility;
-4. keep the jury demonstration on the verified immutable digest and successful
+2. version configuration as an atomic release unit and define forward-only
+   migration recovery boundaries;
+3. keep the jury demonstration on the verified immutable digest and successful
    CD runs `30563381853` and `30564398461`.
 
 The API and Alertmanager observability are deployed and reproducible through
-CD. Autoscaling is proven. Off-cluster backup and full network isolation remain
-explicitly incomplete.
+CD. Autoscaling, NetworkPolicies and immutable image rollback are proven.
+Off-cluster backup and atomic configuration/database rollback remain explicitly
+incomplete.
