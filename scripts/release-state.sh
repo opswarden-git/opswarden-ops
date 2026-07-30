@@ -19,11 +19,25 @@ release_state_snapshot() {
   local resource=$2
   local name=$3
   local index=${#RELEASE_STATE_NAMES[@]}
-  local file="$RELEASE_STATE_DIR/${index}.yaml"
+  local file="$RELEASE_STATE_DIR/${index}.json"
   local existed=0
 
   if kubectl --context "$RELEASE_STATE_CONTEXT" --namespace "$namespace" \
-    get "$resource/$name" -o yaml >"$file" 2>/dev/null; then
+    get "$resource/$name" -o json 2>/dev/null \
+    | jq '
+        del(
+          .metadata.creationTimestamp,
+          .metadata.deletionGracePeriodSeconds,
+          .metadata.deletionTimestamp,
+          .metadata.generation,
+          .metadata.managedFields,
+          .metadata.resourceVersion,
+          .metadata.selfLink,
+          .metadata.uid,
+          .metadata.annotations."kubectl.kubernetes.io/last-applied-configuration",
+          .status
+        )
+      ' >"$file"; then
     existed=1
   else
     : >"$file"
