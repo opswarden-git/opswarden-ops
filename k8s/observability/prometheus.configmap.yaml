@@ -10,6 +10,7 @@ data:
     rule_files:
       - /etc/prometheus/opswarden-alertmanager.rules.yml
       - /etc/prometheus/opswarden-backup.rules.yml
+      - /etc/prometheus/opswarden-logging.rules.yml
     scrape_configs:
       - job_name: 'prometheus'
         static_configs:
@@ -81,6 +82,12 @@ data:
           - source_labels: [__meta_kubernetes_endpoint_port_name]
             regex: http-metrics
             action: keep
+      - job_name: 'loki'
+        static_configs:
+          - targets: ['loki.observability.svc.cluster.local:3100']
+      - job_name: 'alloy'
+        static_configs:
+          - targets: ['alloy.observability.svc.cluster.local:12345']
   opswarden-alertmanager.rules.yml: |-
     groups:
       - name: opswarden-alertmanager
@@ -171,3 +178,23 @@ data:
             annotations:
               summary: OpsWarden PostgreSQL backup is stale
               description: The last successful scheduled backup is older than the 26-hour RPO alert threshold.
+  opswarden-logging.rules.yml: |-
+    groups:
+      - name: opswarden-logging
+        rules:
+          - alert: OpsWardenLokiUnavailable
+            expr: up{job="loki"} != 1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: The centralized log store is unavailable
+              description: Prometheus has been unable to scrape Loki for five minutes.
+          - alert: OpsWardenAlloyUnavailable
+            expr: up{job="alloy"} != 1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: The Kubernetes log collector is unavailable
+              description: Prometheus has been unable to scrape Grafana Alloy for five minutes.

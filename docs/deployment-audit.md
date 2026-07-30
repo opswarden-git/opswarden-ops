@@ -105,10 +105,10 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 
 ## Remaining production hardening
 
-1. Encrypted upload and isolated restore are proven manually. The first
-   scheduled run, 30-day retention deletion, backup freshness/failure alerting
-   and an audited offline copy of the matching age identity remain operational
-   follow-ups.
+1. Encrypted upload, isolated restore and the five backup freshness/failure
+   rules are proven. The first scheduled run, an observed 30-day retention
+   deletion and an audited offline copy of the matching age identity remain
+   time- or operator-gated follow-ups.
 2. The full application-namespace NetworkPolicy set is applied and its public,
    database allow and default-deny paths are proven. A future ACME renewal and
    each newly added external reaction must still be monitored against the
@@ -116,13 +116,14 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 3. The backup path omits role passwords intentionally. Disaster recovery
    therefore still requires the credential-rotation runbook after restoring
    schema and data.
-4. Immutable server rollback and restoration are proven across releases with
-   no migration delta. ConfigMaps and HPA/PDB are still reconciled from Git
-   rather than captured as a single atomic release unit; irreversible database
-   migrations remain outside automated rollback.
-5. Prometheus scraping, durable Alertmanager alerts, the Kubernetes Metrics API
-   and HPA scaling are proven. Centralized log alerting is not proven by this
-   run.
+4. The deployment workflow now snapshots and restores its ConfigMaps,
+   Deployments, NetworkPolicy, HPA and PDB as one release ID. Production
+   failure-injection evidence for this guarded rollback remains to be retained.
+   Database migrations are forward-only expand/contract and remain outside
+   automated rollback by design.
+5. Loki and Alloy manifests, retention, Grafana provisioning and Prometheus
+   availability alerts are validated locally. Their first production rollout,
+   log query and alert health proof remain to be retained.
 6. Mutable base-image tags remain in application Docker build stages. Runtime
    behavior is hardened, but full supply-chain reproducibility is incomplete.
 7. WebSocket handshake Origin is not allow-listed server-side. Authentication is
