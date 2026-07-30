@@ -1,0 +1,76 @@
+---
+name: Harden production
+
+"on":
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type APPLY_PRODUCTION_HARDENING
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opswarden-production
+  cancel-in-progress: false
+
+jobs:
+  metrics-server:
+    name: Install and prove Metrics API
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: Require main and explicit confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = refs/heads/main ] || {
+            echo "Production hardening must run from main" >&2
+            exit 1
+          }
+          [ "$CONFIRMATION" = APPLY_PRODUCTION_HARDENING ] || {
+            echo "confirmation must equal APPLY_PRODUCTION_HARDENING" >&2
+            exit 1
+          }
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
+        with:
+          version: v1.36.1
+
+      - name: Configure production kubeconfig
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+        run: |
+          set -euo pipefail
+          [ -n "$KUBE_CONFIG_B64" ] || {
+            echo "production secret KUBE_CONFIG_B64 is missing" >&2
+            exit 1
+          }
+          umask 077
+          printf '%s' "$KUBE_CONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Install and verify Metrics Server
+        env:
+          EXPECTED_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+          NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
+        run: ./scripts/verify-metrics-server.sh
+
+      - name: Verify public application after hardening
+        env:
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent "$API_ORIGIN/health" >/dev/null
+          curl --fail --show-error --silent "$API_ORIGIN/about.json" |
+            jq -e '.server.services | type == "array"' >/dev/null
