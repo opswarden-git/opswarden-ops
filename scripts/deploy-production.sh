@@ -28,11 +28,18 @@ source "$script_dir/release-state.sh"
 release_dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/opswarden-release.XXXXXX")
 release_state_init "$EXPECTED_CONTEXT" "$release_dir"
 
+release_state_snapshot observability serviceaccount kube-state-metrics
+release_state_snapshot observability role kube-state-metrics-backup-reader
+release_state_snapshot observability rolebinding kube-state-metrics-backup-reader
+release_state_snapshot observability deployment kube-state-metrics
+release_state_snapshot observability service kube-state-metrics
 release_state_snapshot observability configmap prometheus-config
-release_state_snapshot observability configmap opswarden-alertmanager-dashboard
+release_state_snapshot observability configmap grafana-dashboard-opswarden-alertmanager
 release_state_snapshot observability configmap grafana-datasources
+release_state_snapshot observability configmap grafana-dashboards-provisioning
 release_state_snapshot observability configmap loki-config
 release_state_snapshot observability configmap alloy-config
+release_state_snapshot observability persistentvolumeclaim loki-data
 release_state_snapshot observability deployment loki
 release_state_snapshot observability deployment alloy
 release_state_snapshot observability deployment grafana
@@ -84,7 +91,10 @@ kubectl --context "$EXPECTED_CONTEXT" apply \
   -f k8s/observability/kube-state-metrics.deployment.yaml
 kubectl --context "$EXPECTED_CONTEXT" --namespace observability \
   rollout status deployment/kube-state-metrics --timeout=180s
-kubectl --context "$EXPECTED_CONTEXT" --namespace observability apply \
+# These manifests declare their own namespaces. In particular, alloy.yaml
+# contains observability workloads plus the default-namespace RBAC needed to
+# read application pod logs, so forcing one namespace would reject that RBAC.
+kubectl --context "$EXPECTED_CONTEXT" apply \
   -f k8s/observability/logging.configmap.yaml \
   -f k8s/observability/loki.yaml \
   -f k8s/observability/alloy.yaml \
@@ -127,11 +137,11 @@ kubectl --context "$EXPECTED_CONTEXT" --namespace kube-public apply \
   -f k8s/traefik/traefik.pdb.yaml
 
 kubectl --context "$EXPECTED_CONTEXT" --namespace observability annotate --overwrite \
-  configmap/prometheus-config configmap/opswarden-alertmanager-dashboard \
-  configmap/grafana-datasources configmap/loki-config configmap/alloy-config \
-  "opswarden.dev/release=$RELEASE_ID"
-kubectl --context "$EXPECTED_CONTEXT" --namespace observability annotate --overwrite \
-  deployment/loki deployment/alloy deployment/grafana \
+  configmap/prometheus-config configmap/grafana-dashboard-opswarden-alertmanager \
+  configmap/grafana-datasources configmap/grafana-dashboards-provisioning \
+  configmap/loki-config configmap/alloy-config \
+  persistentvolumeclaim/loki-data \
+  deployment/kube-state-metrics deployment/loki deployment/alloy deployment/grafana \
   "opswarden.dev/release=$RELEASE_ID"
 kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" annotate --overwrite \
   deployment/server horizontalpodautoscaler/server poddisruptionbudget/server \
