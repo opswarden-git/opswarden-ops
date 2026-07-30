@@ -13,6 +13,11 @@ spec:
     name: server
   minReplicas: 2
   maxReplicas: 6
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+    scaleDown:
+      stabilizationWindowSeconds: 60
   metrics:
     - type: Resource
       resource:
