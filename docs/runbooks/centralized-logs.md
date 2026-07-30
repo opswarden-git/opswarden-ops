@@ -25,8 +25,9 @@ curl -fsS -G http://127.0.0.1:13100/loki/api/v1/query \
   --data-urlencode 'query={namespace="default",app="server"}'
 ```
 
-Do not expose Loki publicly: authentication is disabled because it is reachable
-only through the cluster network and Grafana proxy. The retained block volume
+Do not expose Loki publicly: authentication is disabled. `loki-ingress` accepts
+TCP 3100 only from Alloy, Grafana and Prometheus Pods in `observability`; other
+cluster workloads cannot query or write logs. The retained block volume
 protects logs from a Pod replacement, but it is not a multi-zone archive.
 Export to a dedicated object-store prefix before claiming disaster-recovery
 durability for logs.

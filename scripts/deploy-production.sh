@@ -38,6 +38,7 @@ release_state_snapshot observability deployment alloy
 release_state_snapshot observability deployment grafana
 release_state_snapshot observability service loki
 release_state_snapshot observability service alloy
+release_state_snapshot observability networkpolicy loki-ingress
 release_state_snapshot observability serviceaccount alloy
 release_state_snapshot default role alloy-pod-logs
 release_state_snapshot default rolebinding alloy-pod-logs
