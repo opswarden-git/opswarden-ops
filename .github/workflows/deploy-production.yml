@@ -106,4 +106,5 @@ jobs:
           PUBLIC_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
           API_ORIGIN: ${{ vars.API_ORIGIN }}
           SERVER_IMAGE: ${{ steps.image.outputs.resolved }}
+          RELEASE_ID: ${{ github.sha }}
         run: ./scripts/deploy-production.sh

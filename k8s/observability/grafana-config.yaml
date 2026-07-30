@@ -15,6 +15,13 @@ data:
         isDefault: true
         version: 1
         editable: false
+      - name: Loki
+        type: loki
+        access: proxy
+        orgId: 1
+        url: http://loki.observability.svc.cluster.local:3100
+        version: 1
+        editable: false
 ---
 apiVersion: v1
 kind: ConfigMap
