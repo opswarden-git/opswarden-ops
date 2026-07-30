@@ -91,6 +91,13 @@ kubectl --context "$EXPECTED_CONTEXT" apply \
   -f k8s/observability/kube-state-metrics.deployment.yaml
 kubectl --context "$EXPECTED_CONTEXT" --namespace observability \
   rollout status deployment/kube-state-metrics --timeout=180s
+# A bound PVC has controller-assigned immutable fields. Create it once, but do
+# not re-apply its creation manifest during ordinary releases.
+if ! kubectl --context "$EXPECTED_CONTEXT" --namespace observability \
+  get persistentvolumeclaim/loki-data >/dev/null 2>&1; then
+  kubectl --context "$EXPECTED_CONTEXT" apply \
+    -f k8s/observability/loki.pvc.yaml
+fi
 # These manifests declare their own namespaces. In particular, alloy.yaml
 # contains observability workloads plus the default-namespace RBAC needed to
 # read application pod logs, so forcing one namespace would reject that RBAC.
