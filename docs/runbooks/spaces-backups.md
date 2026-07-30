@@ -8,6 +8,15 @@ Le bucket de production est privé et dédié aux sauvegardes:
 - préfixe: `production/postgres`;
 - rétention: `30d`.
 
+Objectifs opérationnels:
+
+- RPO cible: 26 heures, soit une exécution quotidienne plus deux heures de
+  marge avant alerte;
+- RTO cible: 4 heures pour récupérer les objets, restaurer PostgreSQL dans un
+  environnement propre et effectuer la rotation des identifiants globaux;
+- une sauvegarde n'est récupérable que si l'identité age correspondant au
+  manifeste SOPS reste disponible hors du cluster.
+
 La clé Spaces doit être limitée à ce seul bucket avec les permissions
 `Read/Write/Delete`. Ne passez jamais l'Access Key ou la Secret Key en argument
 de commande, dans un fichier `.env`, dans un ticket ou dans un chat.
@@ -93,3 +102,26 @@ Dans DOKS FRA1, le nom régional Spaces se résout actuellement vers
 uniquement cette adresse en `/32` sur TCP 443, tout en continuant à refuser les
 autres destinations RFC1918. Si DigitalOcean change cette résolution, validez
 la nouvelle adresse avant de modifier l'allowlist.
+
+## Supervision et preuves différées
+
+kube-state-metrics est limité aux `Jobs` et `CronJobs` du namespace `default`.
+Prometheus alerte si le CronJob est absent ou suspendu, si un Job planifié
+échoue, si aucune exécution planifiée n'a jamais réussi après 26 heures, ou si
+le dernier succès dépasse 26 heures.
+
+Les preuves suivantes sont nécessairement différées:
+
+- première exécution réellement créée par le contrôleur CronJob à `02:17 UTC`;
+- suppression d'objets âgés de plus de `30d`.
+
+Ne marquez ces deux preuves terminées qu'après observation de l'état réel. La
+vérification complète par téléchargement reste quotidienne pour privilégier
+l'intégrité tant que la base est petite. Réévaluez ce choix si les frais de
+récupération Cold Storage ou la taille du dump deviennent significatifs.
+
+Conservez une copie chiffrée ou matérielle de
+`~/.config/sops/age/keys.txt` dans un emplacement de récupération distinct. Ne
+la commitez pas, ne la placez pas dans le cluster et ne la réutilisez pas comme
+secret applicatif. Testez périodiquement cette copie en déchiffrant le manifeste
+SOPS dans une machine isolée sans afficher son contenu.
