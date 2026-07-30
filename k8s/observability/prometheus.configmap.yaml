@@ -7,10 +7,26 @@ data:
   prometheus.yml: |-
     global:
       scrape_interval: 15s
+    rule_files:
+      - /etc/prometheus/opswarden-alertmanager.rules.yml
     scrape_configs:
       - job_name: 'prometheus'
         static_configs:
           - targets: ['localhost:9090']
+      - job_name: 'opswarden-server'
+        metrics_path: /metrics
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: server
+            action: keep
+          - source_labels: [__meta_kubernetes_service_label_app]
+            regex: server
+            action: keep
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            regex: http
+            action: keep
       - job_name: 'kubernetes-nodes-cadvisor'
         kubernetes_sd_configs:
           - role: node
@@ -52,3 +68,38 @@ data:
           - source_labels: [__meta_kubernetes_service_name]
             regex: node-exporter
             action: keep
+  opswarden-alertmanager.rules.yml: |-
+    groups:
+      - name: opswarden-alertmanager
+        rules:
+          - alert: OpsWardenAlertmanagerDeliveryFailed
+            expr: increase(opswarden_alertmanager_webhook_deliveries_total{outcome="failed"}[5m]) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: OpsWarden failed to persist or execute an Alertmanager delivery
+              description: At least one Alertmanager delivery failed during the last five minutes.
+          - alert: OpsWardenAlertmanagerRejectionsHigh
+            expr: increase(opswarden_alertmanager_webhook_deliveries_total{outcome="rejected"}[5m]) > 5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: OpsWarden is rejecting Alertmanager deliveries
+              description: More than five Alertmanager deliveries were rejected during a five-minute window.
+          - alert: OpsWardenAlertmanagerDuplicateRatioHigh
+            expr: |
+              (
+                sum(increase(opswarden_alertmanager_webhook_deliveries_total{outcome="duplicate"}[15m]))
+                /
+                clamp_min(sum(increase(opswarden_alertmanager_webhook_deliveries_total[15m])), 1)
+              ) > 0.5
+              and
+              sum(increase(opswarden_alertmanager_webhook_deliveries_total[15m])) > 10
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Alertmanager duplicate delivery ratio is high
+              description: More than half of at least ten recent Alertmanager deliveries were semantic retries.

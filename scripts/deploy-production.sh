@@ -41,6 +41,17 @@ rollback() {
 }
 trap rollback ERR
 
+echo ">> Configuration de l'observabilité Alertmanager"
+kubectl --context "$EXPECTED_CONTEXT" --namespace observability apply \
+  -f k8s/observability/prometheus.configmap.yaml \
+  -f k8s/observability/opswarden-alertmanager-dashboard.yaml
+kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" apply \
+  -f k8s/observability/opswarden-metrics.networkpolicy.yaml
+kubectl --context "$EXPECTED_CONTEXT" --namespace observability \
+  rollout restart deployment/prometheus
+kubectl --context "$EXPECTED_CONTEXT" --namespace observability \
+  rollout status deployment/prometheus --timeout=180s
+
 if kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" \
   get cronjob/postgres-backup >/dev/null 2>&1; then
   echo ">> Sauvegarde pré-déploiement"
@@ -67,6 +78,35 @@ API_ONLY=1 \
   ABOUT_URL="$api_origin/about.json" \
   WS_URL="$api_origin/ws" \
   ./scripts/smoke.sh
+
+(
+  kubectl --context "$EXPECTED_CONTEXT" --namespace observability \
+    port-forward service/prometheus 19090:9090 >"$RUNNER_TEMP/prometheus-port-forward.log" 2>&1 &
+  forward_pid=$!
+  trap 'kill "$forward_pid" 2>/dev/null || true' EXIT
+
+  for _ in $(seq 1 30); do
+    if curl --fail --silent http://127.0.0.1:19090/-/ready >/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+
+  targets=$(curl --fail --silent \
+    'http://127.0.0.1:19090/api/v1/query?query=up%7Bjob%3D%22opswarden-server%22%7D')
+  jq -e '
+    .status == "success"
+    and any(.data.result[]; .value[1] == "1")
+  ' <<<"$targets" >/dev/null
+
+  rules=$(curl --fail --silent http://127.0.0.1:19090/api/v1/rules)
+  jq -e '
+    [.data.groups[].rules[].name] as $names
+    | ($names | index("OpsWardenAlertmanagerDeliveryFailed")) != null
+    and ($names | index("OpsWardenAlertmanagerRejectionsHigh")) != null
+    and ($names | index("OpsWardenAlertmanagerDuplicateRatioHigh")) != null
+  ' <<<"$rules" >/dev/null
+)
 
 trap - ERR
 echo ">> Déploiement production vérifié"
