@@ -8,6 +8,11 @@ name: Harden production
         description: Type APPLY_PRODUCTION_HARDENING
         required: true
         type: string
+      prove_scaling:
+        description: Exercise a controlled server HPA scale event (2 -> 3)
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -65,6 +70,14 @@ jobs:
           EXPECTED_CONTEXT: ${{ vars.KUBE_CONTEXT }}
           NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
         run: ./scripts/verify-metrics-server.sh
+
+      - name: Prove controlled HPA scaling
+        if: inputs.prove_scaling
+        env:
+          EXPECTED_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+          NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+        run: ./scripts/prove-hpa-scaling.sh
 
       - name: Verify public application after hardening
         env:
