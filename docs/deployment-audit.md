@@ -63,6 +63,14 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
   isolated Job `postgres-backup-verify-fv75q` validates SHA-256 and gzip,
   restores the schema and data, and proves the `users` relation plus successful
   SQLx migration records.
+- production Loki and Alloy rollouts are Ready; Prometheus reports both targets
+  `up=1` and both availability rules healthy. A disposable, digest-pinned Pod
+  produced `OPSWARDEN_LOG_PIPELINE_PROOF_20260730`, retrieved as one Loki stream
+  and one entry, then removed.
+- the release-state helper was exercised against a disposable production
+  ConfigMap: snapshot `before`, mutate to `after`, restore to `before`, then
+  remove the proof resource. The test also caught and corrected stale
+  Kubernetes `resourceVersion` metadata before the helper entered a release.
 
 ## Findings corrected on the audited branches
 
@@ -117,13 +125,15 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
    therefore still requires the credential-rotation runbook after restoring
    schema and data.
 4. The deployment workflow now snapshots and restores its ConfigMaps,
-   Deployments, NetworkPolicy, HPA and PDB as one release ID. Production
-   failure-injection evidence for this guarded rollback remains to be retained.
-   Database migrations are forward-only expand/contract and remain outside
-   automated rollback by design.
-5. Loki and Alloy manifests, retention, Grafana provisioning and Prometheus
-   availability alerts are validated locally. Their first production rollout,
-   log query and alert health proof remain to be retained.
+   Deployments, NetworkPolicy, HPA and PDB as one release ID. Snapshot mutation
+   and restoration are proven on a disposable production resource; a complete
+   failed application rollout is intentionally not injected. Database
+   migrations are forward-only expand/contract and remain outside automated
+   rollback by design.
+5. Loki and Alloy are deployed with seven-day retained-volume storage, Grafana
+   provisioning and healthy Prometheus availability alerts. A production log
+   marker was collected and queried end to end. Multi-zone/object-store log
+   durability remains out of scope.
 6. Mutable base-image tags remain in application Docker build stages. Runtime
    behavior is hardened, but full supply-chain reproducibility is incomplete.
 7. WebSocket handshake Origin is not allow-listed server-side. Authentication is
@@ -133,14 +143,12 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 
 ## Safe next gate
 
-Before broadening the production claim:
-
-1. version configuration as an atomic release unit and define forward-only
-   migration recovery boundaries;
-2. keep the jury demonstration on the verified immutable digest and successful
-   CD runs `30563381853` and `30564398461`.
+Before broadening the production claim, keep the jury demonstration on the
+verified immutable digest and successful CD runs `30563381853` and
+`30564398461`.
 
 The API and Alertmanager observability are deployed and reproducible through
-CD. Autoscaling, NetworkPolicies, immutable image rollback and encrypted
-off-cluster backup with isolated restore are proven. Atomic
-configuration/database rollback remains explicitly incomplete.
+CD. Autoscaling, NetworkPolicies, immutable image rollback, guarded
+configuration restoration, centralized log ingestion and encrypted off-cluster
+backup with isolated restore are proven. Database rollback remains explicitly
+forward-only.
