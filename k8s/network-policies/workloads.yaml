@@ -213,6 +213,14 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    # DOKS resolves the FRA1 Spaces regional endpoint to this internal address.
+    # Keep this narrower than the RFC1918 exclusion above.
+    - to:
+        - ipBlock:
+            cidr: 10.114.15.254/32
+      ports:
+        - protocol: TCP
+          port: 443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -236,6 +244,13 @@ spec:
               - 10.0.0.0/8
               - 172.16.0.0/12
               - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+    # Same FRA1 Spaces endpoint as the upload Job; no other RFC1918 egress.
+    - to:
+        - ipBlock:
+            cidr: 10.114.15.254/32
       ports:
         - protocol: TCP
           port: 443

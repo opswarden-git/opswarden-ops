@@ -101,8 +101,13 @@ spec:
               # grantor. A clean cluster cannot replay that provenance when
               # the named grantor lacks ADMIN OPTION on the granted role, so
               # let the isolated restore superuser become the new grantor.
+              # pg_dump also preserves per-database role settings without
+              # exporting the cluster-global roles themselves. Those settings
+              # are intentionally omitted from this isolated data restore.
               gzip -dc cluster.sql.gz \
-                | sed -E 's/ GRANTED BY [^;]+;/;/' \
+                | sed -E \
+                    -e '/^ALTER ROLE .* IN DATABASE .* SET /d' \
+                    -e 's/ GRANTED BY [^;]+;/;/' \
                 | psql -h /tmp -U restore_admin -d postgres -v ON_ERROR_STOP=1
               psql -h /tmp -U restore_admin -d "$BACKUP_EXPECTED_DATABASE" -v ON_ERROR_STOP=1 -Atqc \
                 "SELECT to_regclass('public.users') IS NOT NULL" | grep -qx t

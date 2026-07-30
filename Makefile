@@ -4,7 +4,7 @@
 # Inclut aussi la qualité (fmt / validate / lint), repliée ici depuis l'ex-Justfile.
 #
 # Démarrage rapide (depuis ce dossier) :
-#   cp .env.example .env && $EDITOR .env   # poser les jetons DO + Spaces
+#   cp .env.example .env && $EDITOR .env   # API DO + clés du backend Terraform uniquement
 #   cp terraform/backend.hcl.example terraform/backend.hcl && $EDITOR terraform/backend.hcl
 #   nix develop                            # ou: export $(grep -v '^#' .env | xargs)
 #   make all TF_BACKEND_CONFIG=terraform/backend.hcl
@@ -67,7 +67,7 @@ K8S_MANIFESTS := $(shell find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
 .PHONY: help all backend-init infra kubeconfig deploy db-roles deploy-server deploy-self-hosted-web deploy-app deploy-app-local db-check hosts smoke status destroy \
         fmt fmt-check validate dry-run tf-lint check-plaintext-secret-manifests \
         validate-templates secret-dry-run secret-apply secrets-dry-run secrets-apply \
-        backup-enable backup-run backup-verify backup-status \
+        backup-secret-configure backup-enable backup-run backup-verify backup-status \
         cert-manager-install tls tls-staging tls-status \
         metrics hpa pdb load harden soft-affinity hard-affinity \
         minikube minikube-host-preflight minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
@@ -294,6 +294,9 @@ tls-status: ## Affiche l'état cert-manager, du certificat et de l'Ingress
 	kubectl get certificate,certificaterequest,order,challenge -A
 	kubectl get ingress -A
 
+backup-secret-configure: ## Saisit et chiffre interactivement les identifiants Spaces
+	./scripts/configure-spaces-backup-secret.sh
+
 backup-enable: ## Active les sauvegardes chiffrées Spaces (CONFIRM=ENABLE_BACKUPS)
 	@bash -c 'set -euo pipefail; \
 	if [ "$${CONFIRM:-}" != "ENABLE_BACKUPS" ]; then \
@@ -335,8 +338,7 @@ backup-run: ## Déclenche immédiatement un backup depuis le CronJob
 		|| { echo ">> Erreur: contexte courant $$CTX != $$EXPECTED_CONTEXT"; exit 1; }'
 	@JOB="postgres-backup-manual-$$(date -u +%Y%m%d%H%M%S)"; \
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" create job "$$JOB" --from=cronjob/postgres-backup; \
-	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" wait --for=condition=Complete "job/$$JOB" --timeout=130m; \
-	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" logs "job/$$JOB" --all-containers=true
+	./scripts/wait-for-job.sh "$${EXPECTED_CONTEXT}" "$${NAMESPACE}" "$$JOB"
 
 backup-verify: ## Télécharge, déchiffre et restaure le dernier backup dans un Postgres isolé
 	@bash -c 'set -euo pipefail; \
@@ -349,8 +351,7 @@ backup-verify: ## Télécharge, déchiffre et restaure le dernier backup dans un
 	@JOB=$$(kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" \
 		create -f k8s/postgres/postgres-backup-verify.job.yaml -o jsonpath='{.metadata.name}'); \
 	echo ">> Job de restauration isolée: $$JOB"; \
-	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" wait --for=condition=Complete "job/$$JOB" --timeout=130m; \
-	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" logs "job/$$JOB" --all-containers=true
+	./scripts/wait-for-job.sh "$${EXPECTED_CONTEXT}" "$${NAMESPACE}" "$$JOB"
 
 backup-status: ## Affiche CronJob, derniers Jobs et événements de sauvegarde
 	kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" get cronjob/postgres-backup

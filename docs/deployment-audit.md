@@ -58,6 +58,11 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
   to `v1.0.11`; run `30566497276` restores `v1.0.12`. Both pass rollout,
   application and Prometheus proofs. There is no SQL migration delta between
   the two releases.
+- Spaces Job `postgres-backup-manual-20260730191627` uploads an encrypted
+  PostgreSQL dump and verifies all three remote files by downloading them;
+  isolated Job `postgres-backup-verify-fv75q` validates SHA-256 and gzip,
+  restores the schema and data, and proves the `users` relation plus successful
+  SQLx migration records.
 
 ## Findings corrected on the audited branches
 
@@ -91,19 +96,26 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
     client-web and Prometheus traffic. The first rollout exposed the danger of
     introducing an isolating policy incrementally; recovery PR #11 and run
     `30564398461` are the retained incident and recovery evidence.
+15. Backup and restore containers now share dump files through `fsGroup 20000`
+    with group-readable permissions. DOKS' internal FRA1 Spaces endpoint is
+    allowed as a single `/32` on TCP 443 for backup workloads only.
+16. Isolated restore omits per-database settings for cluster-global roles that
+    `pg_dump --no-owner` does not export, while preserving and validating all
+    application schema and data.
 
-## Unresolved production blockers
+## Remaining production hardening
 
-1. The Spaces backup Secret still contains a blocking placeholder, so no remote
-   backup upload or isolated restore from Spaces is claimed. A validated local
-   pre-migration dump exists, but it is not a substitute for off-cluster backup.
+1. Encrypted upload and isolated restore are proven manually. The first
+   scheduled run, 30-day retention deletion, backup freshness/failure alerting
+   and an audited offline copy of the matching age identity remain operational
+   follow-ups.
 2. The full application-namespace NetworkPolicy set is applied and its public,
    database allow and default-deny paths are proven. A future ACME renewal and
    each newly added external reaction must still be monitored against the
    explicit egress allowlist.
-3. The backup path omits role passwords intentionally (`--no-role-passwords`).
-   Recovery therefore requires the credential-rotation runbook. A real Spaces
-   upload and isolated restore remain mandatory.
+3. The backup path omits role passwords intentionally. Disaster recovery
+   therefore still requires the credential-rotation runbook after restoring
+   schema and data.
 4. Immutable server rollback and restoration are proven across releases with
    no migration delta. ConfigMaps and HPA/PDB are still reconciled from Git
    rather than captured as a single atomic release unit; irreversible database
@@ -122,13 +134,12 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 
 Before broadening the production claim:
 
-1. provision restricted Spaces credentials and prove upload plus isolated restore;
-2. version configuration as an atomic release unit and define forward-only
+1. version configuration as an atomic release unit and define forward-only
    migration recovery boundaries;
-3. keep the jury demonstration on the verified immutable digest and successful
+2. keep the jury demonstration on the verified immutable digest and successful
    CD runs `30563381853` and `30564398461`.
 
 The API and Alertmanager observability are deployed and reproducible through
-CD. Autoscaling, NetworkPolicies and immutable image rollback are proven.
-Off-cluster backup and atomic configuration/database rollback remain explicitly
-incomplete.
+CD. Autoscaling, NetworkPolicies, immutable image rollback and encrypted
+off-cluster backup with isolated restore are proven. Atomic
+configuration/database rollback remains explicitly incomplete.
