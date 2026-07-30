@@ -9,6 +9,22 @@ spec:
   policyTypes:
     - Ingress
   ingress:
+    # This policy can be the first ingress policy selecting the server in an
+    # existing cluster. Keep every legitimate caller here so enabling metrics
+    # never cuts the public application path.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-public
+          podSelector:
+            matchLabels:
+              app: traefik
+        - podSelector:
+            matchLabels:
+              app: client-web
+      ports:
+        - protocol: TCP
+          port: 8080
     - from:
         - namespaceSelector:
             matchLabels:
