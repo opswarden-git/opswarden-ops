@@ -45,6 +45,11 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
   `accepted +2` and `failed +0`; all temporary resources were removed;
 - bearer-token rotation and rollback reject each stale secret with HTTP 401 and
   accept the active secret with HTTP 202 while preserving connection identity.
+- hardening run `30565376997` installs two Metrics Server `v0.8.1` replicas
+  pinned by multi-architecture digest and proves node, pod and HPA CPU metrics;
+- hardening run `30565632048` observes a controlled server HPA scale event from
+  two to three ready replicas, then restores the nominal policy. Follow-up run
+  `30565794256` proves `replicas=2`, `desired=2` and a healthy public API.
 
 ## Findings corrected on the audited branches
 
@@ -94,9 +99,9 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 4. Production rollback restores the previous server image only. It does not
    version or restore ConfigMaps, HPA/PDB or database migrations, and a first
    deployment has no previous image.
-5. Prometheus scraping and durable Alertmanager alerts are proven. The
-   Kubernetes Metrics API remains unavailable, so the deployed HPA cannot yet
-   obtain CPU utilization. Centralized log alerting is not proven by this run.
+5. Prometheus scraping, durable Alertmanager alerts, the Kubernetes Metrics API
+   and HPA scaling are proven. Centralized log alerting is not proven by this
+   run.
 6. Mutable base-image tags remain in application Docker build stages. Runtime
    behavior is hardened, but full supply-chain reproducibility is incomplete.
 7. WebSocket handshake Origin is not allow-listed server-side. Authentication is
@@ -111,11 +116,10 @@ Before broadening the production claim:
 1. provision restricted Spaces credentials and prove upload plus isolated restore;
 2. stage and apply the remaining workload NetworkPolicies with explicit
    negative-connectivity tests, without breaking ACME or external reactions;
-3. install and verify metrics-server before relying on the HPA;
-4. exercise the image rollback path and document migration compatibility;
-5. keep the jury demonstration on the verified immutable digest and successful
+3. exercise the image rollback path and document migration compatibility;
+4. keep the jury demonstration on the verified immutable digest and successful
    CD runs `30563381853` and `30564398461`.
 
 The API and Alertmanager observability are deployed and reproducible through
-CD. Off-cluster backup, full network isolation and autoscaling evidence remain
+CD. Autoscaling is proven. Off-cluster backup and full network isolation remain
 explicitly incomplete.
