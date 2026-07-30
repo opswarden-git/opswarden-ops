@@ -71,6 +71,22 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
   ConfigMap: snapshot `before`, mutate to `after`, restore to `before`, then
   remove the proof resource. The test also caught and corrected stale
   Kubernetes `resourceVersion` metadata before the helper entered a release.
+- release `v1.0.13` passed quality, browser E2E, Linux, Windows and macOS
+  packaging, immutable server/web image builds and provenance attestations in
+  run `30580631905`. Production run `30582420348` resolved the server to
+  `sha256:1acd2b9bff23bf61bd014cfe38d1680ab0f9a9bd301a15c8f167720d7b488919`,
+  completed backup Job `postgres-backup-manual-20260730211238`, rolled two
+  ready replicas and passed the application, Prometheus and backup checks.
+- independent post-deploy probes returned WebSocket `101` for the exact
+  `https://app.opswarden.dev` Origin and for an originless service client, but
+  `403` for a cross-site Origin. Prometheus reported both server replicas,
+  kube-state-metrics, Loki and Alloy `up=1`, with every loaded rule healthy.
+- the guarded rollout exposed and permanently corrected three pre-server
+  deployment defects: a forced namespace on mixed-namespace Alloy RBAC
+  (PR #25), a kube-state-metrics liveness probe using the wrong port (PR #26),
+  and reapplication of controller-owned immutable fields on the retained Loki
+  PVC (PR #27). Each failed attempt restored its release snapshot before the
+  application rollout.
 
 ## Findings corrected on the audited branches
 
@@ -110,6 +126,17 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
 16. Isolated restore omits per-database settings for cluster-global roles that
     `pg_dump --no-owner` does not export, while preserving and validating all
     application schema and data.
+17. Every application Docker `FROM` reference is digest-pinned and CI rejects
+    regressions to mutable base-image tags.
+18. WebSocket handshakes enforce an exact browser Origin allowlist before
+    upgrade. Originless native and service clients remain supported and still
+    authenticate in-band.
+19. Mixed-namespace observability resources are applied without a forced
+    namespace, and the retained Loki PVC is created only when absent. Bound
+    controller fields are never treated as release-time changes.
+20. kube-state-metrics uses `/readyz` on its telemetry port and `/livez` on its
+    main exposition port. The corrected production Pod remains Ready with zero
+    restarts.
 
 ## Remaining production hardening
 
@@ -134,21 +161,16 @@ NEXT_PUBLIC_WS_URL=wss://api.opswarden.dev/ws
    provisioning and healthy Prometheus availability alerts. A production log
    marker was collected and queried end to end. Multi-zone/object-store log
    durability remains out of scope.
-6. Mutable base-image tags remain in application Docker build stages. Runtime
-   behavior is hardened, but full supply-chain reproducibility is incomplete.
-7. WebSocket handshake Origin is not allow-listed server-side. Authentication is
-   in-band with a bearer token (not a cookie), reducing cross-site handshake
-   impact, but an explicit origin policy remains defense in depth for the Vercel
-   split.
 
 ## Safe next gate
 
-Before broadening the production claim, keep the jury demonstration on the
-verified immutable digest and successful CD runs `30563381853` and
-`30564398461`.
+The current production baseline is release `v1.0.13`, immutable server digest
+`sha256:1acd2b9bff23bf61bd014cfe38d1680ab0f9a9bd301a15c8f167720d7b488919`
+and successful guarded deployment `30582420348`.
 
-The API and Alertmanager observability are deployed and reproducible through
-CD. Autoscaling, NetworkPolicies, immutable image rollback, guarded
-configuration restoration, centralized log ingestion and encrypted off-cluster
-backup with isolated restore are proven. Database rollback remains explicitly
-forward-only.
+The API, WebSocket Origin policy and Alertmanager observability are deployed and
+reproducible through CD. Autoscaling, NetworkPolicies, immutable image rollback,
+guarded configuration restoration, centralized log ingestion and encrypted
+off-cluster backup with isolated restore are proven. Database rollback remains
+explicitly forward-only. Remaining gates are the time/operator-controlled items
+listed above, not unfinished P0-P3 implementation.
