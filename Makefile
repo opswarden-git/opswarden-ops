@@ -418,8 +418,8 @@ dry-run: ## Simule l'application de la couche infrastructure contre un cluster v
 	}
 	kubectl --request-timeout=10s apply --dry-run=server $(addprefix -f ,$(READY_MANIFESTS))
 
-tf-lint: ## Lint terraform (tflint)
-	cd $(TF_DIR) && tflint || true
+tf-lint: ## Lint terraform (tflint) -- bloquant, exécuté par la CI
+	cd $(TF_DIR) && tflint --init && tflint
 
 ## --- Durcissement production -----------------------------------------------
 

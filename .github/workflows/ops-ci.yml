@@ -70,6 +70,17 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir=terraform validate
 
+      # `terraform validate` only checks that the configuration is internally
+      # coherent. tflint catches provider-level mistakes it accepts, and until
+      # now the target ended in `|| true` and no workflow ever called it.
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6.3.0
+        with:
+          tflint_version: v0.61.0
+
+      - name: Terraform lint
+        run: make tf-lint
+
       - name: Validate Kubernetes manifests
         run: |
           set -euo pipefail
