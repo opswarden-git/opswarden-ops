@@ -1,5 +1,6 @@
 ---
-name: Deploy production
+name: Deploy to production
+run-name: Deploy ${{ inputs.version || 'a pinned image' }} to production
 
 "on":
   workflow_dispatch:
@@ -26,7 +27,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Roll out immutable images
+    name: Deploy the selected server image
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 180

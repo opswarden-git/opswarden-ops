@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/heroicon.png" alt="OpsWarden" width="120" />
   <h1>OpsWarden - Infrastructure</h1>
   <p>
-    <img src="https://github.com/opswarden-git/opswarden-ops/actions/workflows/ops-ci.yml/badge.svg" alt="CI" />
+    <img src="https://github.com/opswarden-git/opswarden-ops/actions/workflows/validate.yml/badge.svg?label=CI" alt="CI" />
     <img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=flat" alt="License: Apache 2.0" />
     <img src="https://img.shields.io/badge/Kubernetes-326ce5?style=flat&logo=kubernetes&logoColor=white" alt="Kubernetes" />
     <img src="https://img.shields.io/badge/DigitalOcean-%230167ff?style=flat&logo=digitalOcean&logoColor=white" alt="DigitalOcean" />

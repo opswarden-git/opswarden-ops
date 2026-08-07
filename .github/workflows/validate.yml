@@ -1,6 +1,7 @@
 ---
-# Ops CI — formate et valide l'IaC (prettier + terraform fmt).
-name: Ops CI
+# Validates the infrastructure definitions on every proposed change.
+name: Validate infrastructure
+run-name: Infrastructure checks for ${{ github.ref_name }}
 
 "on":
   push:
@@ -12,12 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ops-ci-${{ github.ref }}
+  group: infrastructure-validation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
-    name: Format & validate
+    name: Validate infrastructure definitions
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

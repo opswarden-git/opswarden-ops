@@ -1,11 +1,12 @@
 ---
-name: Harden production
+name: Configure production cluster
+run-name: Configure the production cluster for ${{ github.actor }}
 
 "on":
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type APPLY_PRODUCTION_HARDENING
+        description: Type CONFIGURE_PRODUCTION
         required: true
         type: string
       prove_scaling:
@@ -27,8 +28,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  metrics-server:
-    name: Install and prove Metrics API
+  configure:
+    name: Configure production safeguards
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
@@ -39,11 +40,11 @@ jobs:
         run: |
           set -euo pipefail
           [ "$GITHUB_REF" = refs/heads/main ] || {
-            echo "Production hardening must run from main" >&2
+            echo "Production configuration must run from main" >&2
             exit 1
           }
-          [ "$CONFIRMATION" = APPLY_PRODUCTION_HARDENING ] || {
-            echo "confirmation must equal APPLY_PRODUCTION_HARDENING" >&2
+          [ "$CONFIRMATION" = CONFIGURE_PRODUCTION ] || {
+            echo "confirmation must equal CONFIGURE_PRODUCTION" >&2
             exit 1
           }
 
@@ -92,7 +93,7 @@ jobs:
           API_ORIGIN: ${{ vars.API_ORIGIN }}
         run: ./scripts/apply-network-policies.sh
 
-      - name: Verify public application after hardening
+      - name: Verify the application after configuration
         env:
           API_ORIGIN: ${{ vars.API_ORIGIN }}
         run: |
