@@ -39,7 +39,6 @@ release_state_snapshot observability configmap grafana-datasources
 release_state_snapshot observability configmap grafana-dashboards-provisioning
 release_state_snapshot observability configmap loki-config
 release_state_snapshot observability configmap alloy-config
-release_state_snapshot observability persistentvolumeclaim loki-data
 release_state_snapshot observability deployment loki
 release_state_snapshot observability deployment alloy
 release_state_snapshot observability deployment grafana
