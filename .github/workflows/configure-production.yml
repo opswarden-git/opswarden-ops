@@ -60,16 +60,29 @@ jobs:
 
       - name: Configure production kubeconfig
         env:
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          KUBE_CLUSTER_ID: ${{ vars.KUBE_CLUSTER_ID }}
+          EXPECTED_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+          NAMESPACE: ${{ vars.KUBE_NAMESPACE }}
         run: |
           set -euo pipefail
-          [ -n "$KUBE_CONFIG_B64" ] || {
-            echo "production secret KUBE_CONFIG_B64 is missing" >&2
+          [ -n "$DIGITALOCEAN_TOKEN" ] || {
+            echo "production secret DIGITALOCEAN_TOKEN is missing" >&2
+            exit 1
+          }
+          [ -n "$KUBE_CLUSTER_ID" ] || {
+            echo "production variable KUBE_CLUSTER_ID is missing" >&2
             exit 1
           }
           umask 077
-          printf '%s' "$KUBE_CONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kubeconfig"
+          curl --fail --show-error --silent --retry 3 \
+            --header "Authorization: Bearer $DIGITALOCEAN_TOKEN" \
+            --output "$RUNNER_TEMP/kubeconfig" \
+            "https://api.digitalocean.com/v2/kubernetes/clusters/$KUBE_CLUSTER_ID/kubeconfig?expiry_seconds=3600&type=token"
           echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+          kubectl --kubeconfig "$RUNNER_TEMP/kubeconfig" \
+            --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" \
+            auth can-i get deployments | grep -qx yes
 
       - name: Install and verify Metrics Server
         env:
