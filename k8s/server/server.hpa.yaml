@@ -1,7 +1,7 @@
 # HorizontalPodAutoscaler du serveur OpsWarden (basé CPU).
 # Requiert metrics-server (DOKS le fournit ; en local `make metrics`).
-# Scaler au-delà des replicas de base suppose une anti-affinity *preferred*
-# (pas required) sur le Deployment server (cf. scripts/soft-affinity.sh).
+# Scaler au-delà des replicas de base suppose l'anti-affinity souple définie
+# sur le Deployment server.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

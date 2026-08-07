@@ -4,8 +4,7 @@ set -Eeuo pipefail
 EXPECTED_CONTEXT=${EXPECTED_CONTEXT:-}
 NAMESPACE=${NAMESPACE:-}
 API_ORIGIN=${API_ORIGIN:-}
-backup_dir=${RUNNER_TEMP:-/tmp}/opswarden-network-policy-backup
-rollback_armed=1
+rollback_armed=0
 
 for name in EXPECTED_CONTEXT NAMESPACE API_ORIGIN; do
   if [ -z "${!name:-}" ]; then
@@ -18,6 +17,30 @@ if [ "$(kubectl config current-context)" != "$EXPECTED_CONTEXT" ]; then
   echo ">> ERREUR: contexte kubectl inattendu" >&2
   exit 1
 fi
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=scripts/release-state.sh
+source "$script_dir/release-state.sh"
+state_dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/opswarden-network-policy.XXXXXX")
+release_state_init "$EXPECTED_CONTEXT" "$state_dir"
+
+rollback() {
+  status=$?
+  trap - EXIT
+  if [ "$status" -ne 0 ] && [ "$rollback_armed" -eq 1 ]; then
+    echo ">> Échec du durcissement réseau; restauration des policies précédentes" >&2
+    if ! release_state_restore; then
+      echo ">> ATTENTION: la restauration d'au moins une NetworkPolicy a échoué" >&2
+      status=1
+    fi
+  fi
+  kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" \
+    delete pod network-policy-allow-postgres network-policy-deny-postgres \
+    --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  release_state_cleanup
+  exit "$status"
+}
+trap rollback EXIT
 
 policies=(
   "$NAMESPACE:allow-cluster-dns"
@@ -33,42 +56,13 @@ policies=(
   "kube-public:traefik-public-ingress"
 )
 
-mkdir -p "$backup_dir"
 for policy in "${policies[@]}"; do
   namespace=${policy%%:*}
   name=${policy#*:}
-  if kubectl --context "$EXPECTED_CONTEXT" --namespace "$namespace" \
-    get networkpolicy "$name" -o yaml >"$backup_dir/$namespace--$name.yaml" 2>/dev/null; then
-    :
-  else
-    : >"$backup_dir/$namespace--$name.absent"
-  fi
+  release_state_snapshot "$namespace" networkpolicy "$name"
 done
 
-rollback() {
-  status=$?
-  trap - EXIT
-  if [ "$status" -ne 0 ] && [ "$rollback_armed" -eq 1 ]; then
-    echo ">> Échec du durcissement réseau; restauration des policies précédentes" >&2
-    for policy in "${policies[@]}"; do
-      namespace=${policy%%:*}
-      name=${policy#*:}
-      if [ -f "$backup_dir/$namespace--$name.yaml" ]; then
-        kubectl --context "$EXPECTED_CONTEXT" --namespace "$namespace" apply \
-          -f "$backup_dir/$namespace--$name.yaml" >/dev/null || true
-      else
-        kubectl --context "$EXPECTED_CONTEXT" --namespace "$namespace" \
-          delete networkpolicy "$name" --ignore-not-found >/dev/null || true
-      fi
-    done
-  fi
-  kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" \
-    delete pod network-policy-allow-postgres network-policy-deny-postgres \
-    --ignore-not-found --wait=false >/dev/null 2>&1 || true
-  exit "$status"
-}
-trap rollback EXIT
-
+rollback_armed=1
 echo ">> Application ordonnée des autorisations réseau"
 kubectl --context "$EXPECTED_CONTEXT" --namespace "$NAMESPACE" apply \
   -f k8s/network-policies/allow-cluster-dns.yaml

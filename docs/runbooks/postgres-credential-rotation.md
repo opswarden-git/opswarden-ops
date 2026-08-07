@@ -1,6 +1,6 @@
-# PostgreSQL credential rotation (step 2C)
+# Rotate PostgreSQL credentials
 
-OpsWarden uses four distinct PostgreSQL identities:
+OpsWarden uses five distinct PostgreSQL identities:
 
 - `opswarden_admin`: bootstrap only, stored in `postgres-secret`;
 - `opswarden_owner`: `NOLOGIN` owner of the database and schema;
