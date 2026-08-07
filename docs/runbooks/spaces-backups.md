@@ -84,41 +84,18 @@ Un upload réussi ne suffit pas: le chantier n'est terminé qu'après le contrô
 du checksum et la restauration réussie du dernier dump dans le PostgreSQL
 isolé du Job de vérification.
 
-## Preuve de production du 30 juillet 2026
-
-Le contexte `do-fra1-opswarden-cluster`, namespace `default`, a produit les
-preuves suivantes:
-
-- `postgres-backup-manual-20260730191627`: dump réussi, trois fichiers chiffrés
-  envoyés dans Spaces puis retéléchargés par `rclone check`, zéro différence;
-- `postgres-backup-verify-fv75q`: téléchargement du dernier backup, checksum
-  SHA-256 et gzip valides, restauration complète dans PostgreSQL 18 isolé,
-  relation `public.users` présente et migrations SQLx réussies;
-- CronJob `postgres-backup`: planification quotidienne à `02:17 UTC`, préfixe
-  `production/postgres` et rétention `30d`.
-
-Dans DOKS FRA1, le nom régional Spaces se résout actuellement vers
-`10.114.15.254`. Les NetworkPolicies d'upload et de vérification autorisent
-uniquement cette adresse en `/32` sur TCP 443, tout en continuant à refuser les
-autres destinations RFC1918. Si DigitalOcean change cette résolution, validez
-la nouvelle adresse avant de modifier l'allowlist.
-
-## Supervision et preuves différées
+## Supervision
 
 kube-state-metrics est limité aux `Jobs` et `CronJobs` du namespace `default`.
 Prometheus alerte si le CronJob est absent ou suspendu, si un Job planifié
 échoue, si aucune exécution planifiée n'a jamais réussi après 26 heures, ou si
 le dernier succès dépasse 26 heures.
 
-Les preuves suivantes sont nécessairement différées:
-
-- première exécution réellement créée par le contrôleur CronJob à `02:17 UTC`;
-- suppression d'objets âgés de plus de `30d`.
-
-Ne marquez ces deux preuves terminées qu'après observation de l'état réel. La
-vérification complète par téléchargement reste quotidienne pour privilégier
+La vérification complète par téléchargement reste quotidienne pour privilégier
 l'intégrité tant que la base est petite. Réévaluez ce choix si les frais de
-récupération Cold Storage ou la taille du dump deviennent significatifs.
+récupération ou la taille du dump deviennent significatifs. Vérifiez aussi
+périodiquement qu'une exécution est réellement créée à `02:17 UTC` et que les
+objets âgés de plus de `30d` sont supprimés.
 
 Conservez une copie chiffrée ou matérielle de
 `~/.config/sops/age/keys.txt` dans un emplacement de récupération distinct. Ne

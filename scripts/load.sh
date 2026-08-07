@@ -7,10 +7,10 @@
 # Usage :
 #   ./scripts/load.sh                  # 60s, auto-détecte hey/ab, sinon boucle curl
 #   DURATION=120 CONCURRENCY=100 ./scripts/load.sh
-#   WEB_URL=http://api.opswarden.example:30021 ./scripts/load.sh
+#   WEB_URL=http://app.opswarden.dev:30021 ./scripts/load.sh
 set -euo pipefail
 
-WEB_URL="${WEB_URL:-http://app.opswarden.example:30021}"
+WEB_URL="${WEB_URL:-http://app.opswarden.dev:30021}"
 DURATION="${DURATION:-60}"
 CONCURRENCY="${CONCURRENCY:-50}"
 

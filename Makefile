@@ -69,7 +69,7 @@ K8S_MANIFESTS := $(shell find k8s -name '*.yaml' ! -name '*.sops.yaml' | sort)
         validate-templates secret-dry-run secret-apply secrets-dry-run secrets-apply \
         backup-secret-configure backup-enable backup-run backup-verify backup-status \
         cert-manager-install tls tls-staging tls-status \
-        metrics hpa pdb load harden soft-affinity hard-affinity \
+        metrics hpa pdb load harden \
         minikube minikube-host-preflight minikube-up minikube-deploy minikube-hosts minikube-smoke minikube-down
 
 help: ## Affiche cette aide
@@ -442,12 +442,6 @@ hpa: metrics ## Applique le HPA du server (sauté tant que le Deployment n'exist
 
 load: ## Génère de la charge HTTP (test autoscaling) contre l'hôte web
 	WEB_URL=http://$(WEB_HOST):30021 ./scripts/load.sh
-
-soft-affinity: ## Relâche l'anti-affinity required->preferred (clusters nodes < replicas)
-	./scripts/soft-affinity.sh on
-
-hard-affinity: ## Restaure l'anti-affinity stricte (preferred->required)
-	./scripts/soft-affinity.sh off
 
 harden: pdb hpa ## Applique PDB + HPA (ce qui est prêt)
 
