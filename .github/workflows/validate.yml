@@ -1,11 +1,11 @@
 ---
 # Validates the infrastructure definitions on every proposed change.
-name: Validate infrastructure
-run-name: Infrastructure checks for ${{ github.ref_name }}
+name: CI
+run-name: "CI · ${{ github.event.pull_request.number && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 "on":
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -13,12 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: infrastructure-validation-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
-    name: Validate infrastructure definitions
+    name: Infrastructure
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
