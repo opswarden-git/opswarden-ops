@@ -12,9 +12,14 @@
   </p>
 </div>
 
-This repository is the infrastructure and deployment home of OpsWarden, containing all our Cloud-Native provisioning and orchestration files.
+This repository is the infrastructure and deployment home of OpsWarden. It
+contains the Terraform, Kubernetes manifests, encrypted configuration,
+deployment workflows and operational runbooks used by production.
 
-It includes the **Terraform** configuration for our DigitalOcean Kubernetes cluster, our custom **Traefik** routing setup, the **Prometheus & Grafana** observability stack, and strict **Nix** environments for reproducible deployments.
+Terraform provisions the DigitalOcean Kubernetes cluster. Kubernetes manifests
+then define Traefik, PostgreSQL, application workloads, network policies,
+backups and the Prometheus, Grafana, Loki and Alloy observability stack. Nix
+provides the reproducible operator environment.
 
 ## What's Running?
 
@@ -38,7 +43,9 @@ The backend and the database are deployed on a **DigitalOcean** cluster using th
 
 ### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/kubernetes/kubernetes-plain.svg" height="24" /> 3. Kubernetes
 
-**Kubernetes** handles the management of the nodes and horizontal scaling, with completely automated provisioning via Terraform.
+**Kubernetes** runs the application and supporting services. Terraform owns the
+cluster boundary; reviewed manifests and the guarded deployment workflow own
+workload rollout, migrations, health checks and rollback.
 
 <table width="100%">
   <tr>
@@ -60,7 +67,10 @@ Telemetry and traffic routing are handled by **Traefik Ingress**. It securely ro
 
 ### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/grafana/grafana-original.svg" height="24" /> 5. Grafana
 
-Everything is transmitted to **Grafana** for deep observability. We aggregate container states and Prometheus metrics into a collection of clear dashboards that give us a holistic view of the system.
+**Grafana** presents metrics collected by Prometheus and centralized logs stored
+in Loki through Alloy. The dashboards cover application health, Alertmanager
+ingestion, Kubernetes workloads and node resources without making Grafana part
+of the application request path.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/grafana-dashboards.png" alt="Grafana Dashboards Overview" width="100%" />
@@ -71,6 +81,16 @@ For example, here is our detailed Node Exporter dashboard, which we use to close
 <p align="center">
   <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/grafana-node-exporter.png" alt="Grafana Node Exporter" width="100%" />
 </p>
+
+## Operations
+
+Production changes use immutable application images and a guarded workflow
+that runs migrations, waits for rollout health and restores the previous
+release state on failure. PostgreSQL backups are encrypted before upload to
+DigitalOcean Spaces and have a separate restore-verification procedure.
+
+Operator procedures live in [`docs/runbooks`](docs/runbooks): release and
+migrations, credential rotation, backup restoration and centralized logs.
 
 ## Contributing
 
