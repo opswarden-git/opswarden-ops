@@ -89,7 +89,7 @@ that runs migrations, waits for rollout health and restores the previous
 release state on failure. PostgreSQL backups are encrypted before upload to
 DigitalOcean Spaces and have a separate restore-verification procedure.
 
-Operator procedures live in [`docs/runbooks`](docs/runbooks): release and
+Operator procedures live in the [operator runbooks](docs/runbooks): release and
 migrations, credential rotation, backup restoration and centralized logs.
 
 ## Contributing
