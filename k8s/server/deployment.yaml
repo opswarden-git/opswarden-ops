@@ -45,6 +45,10 @@ spec:
                   name: server-secret
             - name: GOOGLE_OAUTH_REDIRECT_URI
               value: https://app.opswarden.dev/api/auth/google/callback
+            - name: GITHUB_AUTH_REDIRECT_URI
+              value: https://app.opswarden.dev/api/auth/github/callback
+            - name: GITHUB_OAUTH_REDIRECT_URI
+              value: https://app.opswarden.dev/api/service-oauth/github/callback
           envFrom:
             - configMapRef:
                 name: server-config
