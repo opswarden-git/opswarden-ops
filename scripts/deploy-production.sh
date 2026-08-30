@@ -49,6 +49,7 @@ release_state_snapshot observability serviceaccount alloy
 release_state_snapshot default role alloy-pod-logs
 release_state_snapshot default rolebinding alloy-pod-logs
 release_state_snapshot "$NAMESPACE" networkpolicy allow-prometheus-server-metrics
+release_state_snapshot "$NAMESPACE" networkpolicy server-smtp-egress
 release_state_snapshot "$NAMESPACE" deployment server
 release_state_snapshot "$NAMESPACE" horizontalpodautoscaler server
 release_state_snapshot "$NAMESPACE" poddisruptionbudget server
