@@ -51,7 +51,8 @@ LB         := k8s/traefik/traefik.ingressclass.yaml k8s/traefik/traefik.rbac.yam
               k8s/traefik/traefik.deployment.yaml k8s/traefik/traefik.service.yaml
 TRAEFIK_APP_RBAC := k8s/traefik/traefik.app-secrets.rbac.yaml
 SERVER_SUPPORT := k8s/server/server.sa.yaml k8s/server/server.service.yaml \
-                  k8s/server/server.ingress.yaml
+                  k8s/server/server.ingress.yaml \
+                  k8s/server/server.smtp-egress.networkpolicy.yaml
 SELF_HOSTED_WEB_SUPPORT := k8s/client-web/client-web.sa.yaml \
                            k8s/client-web/client-web.service.yaml \
                            k8s/client-web/client-web.ingress.yaml

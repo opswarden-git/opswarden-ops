@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: server-smtp-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: server
+  policyTypes:
+    - Egress
+  egress:
+    # Resend's alternative STARTTLS submission port avoids cloud-provider SMTP
+    # filtering while keeping the destination outside private cluster networks.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 2587
