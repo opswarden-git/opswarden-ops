@@ -197,6 +197,7 @@ deploy-server: ## Déploie le serveur Rust nominal (secret applicatif requis)
 		--from-literal=OPSWARDEN_WEB_ORIGIN="$${PUBLIC_ORIGIN}" \
 		--from-literal=OPSWARDEN_TRUSTED_PROXY_HOPS=1 \
 		--from-literal=GOOGLE_OAUTH_REDIRECT_URI="$${API_ORIGIN}/api/auth/google/callback" \
+		--from-literal=GITHUB_AUTH_REDIRECT_URI="$${API_ORIGIN}/api/auth/github/callback" \
 		--from-literal=GITHUB_OAUTH_REDIRECT_URI="$${API_ORIGIN}/api/service-oauth/github/callback" \
 		--dry-run=client -o yaml \
 		| kubectl --context "$${EXPECTED_CONTEXT}" --namespace "$${NAMESPACE}" apply -f -
