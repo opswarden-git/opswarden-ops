@@ -47,11 +47,16 @@ about_file=$(mktemp)
 trap 'rm -f "$about_file"' EXIT
 curl -fsS "${RESOLVE[@]}" -o "$about_file" "$ABOUT_URL"
 jq -e '
-  (.server.current_time | type == "number") and
+  (.server | type == "object") and
   (.server.services | type == "array") and
-  (.server.token | type == "string")
+  (.server.services | length > 0) and
+  all(.server.services[];
+    (.name | type == "string") and
+    (.actions | type == "array") and
+    (.reactions | type == "array")
+  )
 ' "$about_file" >/dev/null
-pass "about Rust ($ABOUT_URL) -> contrat valide"
+pass "catalogue Rust ($ABOUT_URL) -> contrat valide"
 
 set +e
 ws_code=$(curl "${RESOLVE[@]}" --http1.1 --max-time 2 --silent --output /dev/null \
