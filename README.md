@@ -1,11 +1,10 @@
-> [!IMPORTANT]
-> **Infrastructure status: decommissioned**
+> [!WARNING]
+> **The OpsWarden infrastructure is offline**
 >
-> OpsWarden was developed as an academic project, and its assessment is now
-> complete. To avoid unnecessary cloud costs, its production infrastructure and
-> public web deployments have been shut down and this repository has been
-> archived. This is not necessarily permanent: OpsWarden may return after a
-> substantial redesign.
+> The school project has now been graded, so we have shut down the production
+> infrastructure rather than keep unused cloud services running. We may bring
+> OpsWarden back after a larger redesign; until then, this repository remains
+> available as a record of how it was deployed.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/wiki/opswarden-git/opswarden/assets/opswarden-ops/heroicon.png" alt="OpsWarden" width="120" />
